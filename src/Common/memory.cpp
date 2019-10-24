@@ -7,10 +7,12 @@
 
 namespace TB8
 {
-
-void* alloc(size_t size, const char* pszFile, int line)
+namespace memory
 {
-	return malloc(size);
+
+void* malloc(size_t size, const char* pszFile, int line)
+{
+	return ::malloc(size);
 }
 
 void* realloc(void* ptr, size_t size, const char* pszFile, int line)
@@ -23,15 +25,18 @@ void free(void* ptr)
 	::free(ptr);
 }
 
+struct sig g_sig;
+
+}
 }
 
-void* operator new(size_t s, const char* pszFile, int line)
+void* operator new(size_t s, TB8::memory::sig& sig, const char* pszFile, int line)
 {
-	return TB8::alloc(s, pszFile, line);
+	return TB8::memory::malloc(s, pszFile, line);
 }
 
-void operator delete(void* p, const char* pszFile, int line)
+void operator delete(void* p, TB8::memory::sig& sig, const char* pszFile, int line)
 {
-	TB8::free(p);
+	TB8::memory::free(p);
 }
 

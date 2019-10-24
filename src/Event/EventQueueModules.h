@@ -8,6 +8,7 @@ namespace TB8
 enum EventModuleID : u32
 {
 	EventModuleID_Default = 1,
+	EventModuleID_Renderer,
 };
 
 }

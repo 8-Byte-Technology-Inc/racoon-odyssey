@@ -13,17 +13,17 @@ ref_count::ref_count()
 {
 }
 
-s32 ref_count::addref()
+s32 ref_count::AddRef()
 {
 	return m_count.fetch_add(1) + 1;
 }
 
-s32 ref_count::release()
+s32 ref_count::Release()
 {
 	s32 count = m_count.fetch_sub(1) - 1;
 	if (0 == count)
 	{
-		__free();
+		__Free();
 	}
 	return count;
 }

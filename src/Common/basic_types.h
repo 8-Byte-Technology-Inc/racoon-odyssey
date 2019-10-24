@@ -280,20 +280,20 @@ namespace BT8
 
 #define RELEASEI(obj) \
 	if (obj) { \
-	(obj)->Release(); \
-	(obj) = nullptr; \
+		(obj)->Release(); \
+		(obj) = nullptr; \
 	}
 
 #define OBJFREE(obj) \
 	if (obj) { \
-	(obj)->Free(); \
-	(obj) = nullptr; \
+		(obj)->Free(); \
+		(obj) = nullptr; \
 	}
 
 #define PTRFREE(obj) \
 	if (obj) { \
-	free((obj)); \
-	(obj) = nullptr; \
+		TB8_FREE((obj)); \
+		(obj) = nullptr; \
 	}
 
 namespace BT8
@@ -301,13 +301,3 @@ namespace BT8
 	bool IsFloat(const char* value);
 	bool IsHex(const char* value);
 }
-
-#if defined(WIN32)
-
-#elif defined(__APPLE__) || defined(__linux__)
-
-#define ARRAYSIZE(a) \
-	((sizeof(a) / sizeof(*(a))) / \
-	static_cast<size_t>(!(sizeof(a) % sizeof(*(a)))))
-
-#endif

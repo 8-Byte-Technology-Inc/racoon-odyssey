@@ -15,43 +15,47 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="targetver.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Resource.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Client.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="pch.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="basic_types.h">
+    <ClInclude Include="MainClass.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="memory.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="ref_count.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="file_io.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="parse_xml.h">
+    <ClInclude Include="Client_Globals.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Client.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="pch.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="basic_types.cpp">
+    <ClCompile Include="MainClass.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="memory.cpp">
+    <ClCompile Include="Client_Globals.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="ref_count.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="file_io.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="parse_xml.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Client.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="Client.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>

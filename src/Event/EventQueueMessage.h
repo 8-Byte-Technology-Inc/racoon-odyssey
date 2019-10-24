@@ -29,7 +29,7 @@ public:
 	u32 GetObjectID() const { return m_objectID; }
 
 private:
-	virtual void __free() = 0;
+	virtual void __Free() override = 0;
 
 	EventMessageID		m_messageID;
 	u32					m_objectID;

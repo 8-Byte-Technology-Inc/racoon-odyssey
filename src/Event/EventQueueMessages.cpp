@@ -22,7 +22,7 @@ EventMessage_MoveStart* EventMessage_MoveStart::Alloc(s32 dx, s32 dy)
 	return obj;
 }
 
-void EventMessage_MoveStart::__free()
+void EventMessage_MoveStart::__Free()
 {
 	TB8_DEL(this);
 }
@@ -41,7 +41,7 @@ EventMessage_MoveEnd* EventMessage_MoveEnd::Alloc(s32 dx, s32 dy)
 	return obj;
 }
 
-void EventMessage_MoveEnd::__free()
+void EventMessage_MoveEnd::__Free()
 {
 	TB8_DEL(this);
 }
@@ -61,7 +61,7 @@ EventMessage_ResizeWindow* EventMessage_ResizeWindow::Alloc(s32 sizeX, s32 sizeY
 	return obj;
 }
 
-void EventMessage_ResizeWindow::__free()
+void EventMessage_ResizeWindow::__Free()
 {
 	TB8_DEL(this);
 }
@@ -80,7 +80,7 @@ EventMessage_WindowDPIChanged* EventMessage_WindowDPIChanged::Alloc(const IVecto
 	return obj;
 }
 
-void EventMessage_WindowDPIChanged::__free()
+void EventMessage_WindowDPIChanged::__Free()
 {
 	TB8_DEL(this);
 }
@@ -100,7 +100,7 @@ EventMessage_RenderAreaResize* EventMessage_RenderAreaResize::Alloc(s32 dpi, Ren
 	return obj;
 }
 
-void EventMessage_RenderAreaResize::__free()
+void EventMessage_RenderAreaResize::__Free()
 {
 	TB8_DEL(this);
 }
@@ -117,7 +117,7 @@ EventMessage_Activate* EventMessage_Activate::Alloc()
 	return obj;
 }
 
-void EventMessage_Activate::__free()
+void EventMessage_Activate::__Free()
 {
 	TB8_DEL(this);
 }
@@ -134,7 +134,7 @@ EventMessage_Rotate* EventMessage_Rotate::Alloc()
 	return obj;
 }
 
-void EventMessage_Rotate::__free()
+void EventMessage_Rotate::__Free()
 {
 	TB8_DEL(this);
 }
@@ -151,7 +151,7 @@ EventMessage_Close* EventMessage_Close::Alloc()
 	return obj;
 }
 
-void EventMessage_Close::__free()
+void EventMessage_Close::__Free()
 {
 	TB8_DEL(this);
 }
@@ -170,7 +170,7 @@ EventMessage_MouseCursorMove* EventMessage_MouseCursorMove::Alloc(s32 mouseX, s3
 	return obj;
 }
 
-void EventMessage_MouseCursorMove::__free()
+void EventMessage_MouseCursorMove::__Free()
 {
 	TB8_DEL(this);
 }
@@ -189,7 +189,7 @@ EventMessage_MouseLBDown* EventMessage_MouseLBDown::Alloc(s32 mouseX, s32 mouseY
 	return obj;
 }
 
-void EventMessage_MouseLBDown::__free()
+void EventMessage_MouseLBDown::__Free()
 {
 	TB8_DEL(this);
 }
@@ -208,7 +208,7 @@ EventMessage_MouseLBDownHold* EventMessage_MouseLBDownHold::Alloc(u32 frameCount
 	return obj;
 }
 
-void EventMessage_MouseLBDownHold::__free()
+void EventMessage_MouseLBDownHold::__Free()
 {
 	TB8_DEL(this);
 }
@@ -226,7 +226,7 @@ EventMessage_MouseLBDoubleClick* EventMessage_MouseLBDoubleClick::Alloc(const IV
 	return obj;
 }
 
-void EventMessage_MouseLBDoubleClick::__free()
+void EventMessage_MouseLBDoubleClick::__Free()
 {
 	TB8_DEL(this);
 }
@@ -245,7 +245,7 @@ EventMessage_MouseLBUp* EventMessage_MouseLBUp::Alloc(s32 mouseX, s32 mouseY)
 	return obj;
 }
 
-void EventMessage_MouseLBUp::__free()
+void EventMessage_MouseLBUp::__Free()
 {
 	TB8_DEL(this);
 }
@@ -263,7 +263,7 @@ EventMessage_MouseLeave* EventMessage_MouseLeave::Alloc(const IVector2& mousePos
 	return obj;
 }
 
-void EventMessage_MouseLeave::__free()
+void EventMessage_MouseLeave::__Free()
 {
 	TB8_DEL(this);
 }
@@ -281,7 +281,7 @@ EventMessage_MouseHover* EventMessage_MouseHover::Alloc(const IVector2& mousePos
 	return obj;
 }
 
-void EventMessage_MouseHover::__free()
+void EventMessage_MouseHover::__Free()
 {
 	TB8_DEL(this);
 }
@@ -301,7 +301,7 @@ EventMessage_MouseMoveWheel* EventMessage_MouseMoveWheel::Alloc(const IVector2& 
 	return obj;
 }
 
-void EventMessage_MouseMoveWheel::__free()
+void EventMessage_MouseMoveWheel::__Free()
 {
 	TB8_DEL(this);
 }

@@ -12,11 +12,11 @@ class ref_count
 public:
 	ref_count();
 
-	s32 addref();
-	s32 release();
+	s32 AddRef();
+	s32 Release();
 
 private:
-	virtual void __free() = 0;
+	virtual void __Free() = 0;
 
 	std::atomic<s32>	m_count;
 };

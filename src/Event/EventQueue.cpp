@@ -32,7 +32,7 @@ EventQueuePending::~EventQueuePending()
 	{
 		EventMessage* message = m_messages.front();
 		m_messages.pop_front();
-		message->release();
+		message->Release();
 	}
 }
 
@@ -83,7 +83,7 @@ void EventQueue::ProcessPending()
 		__DispatchMessageGeneric(message);
 
 		// we're done with this message, release it.
-		message->release();
+		message->Release();
 	}
 
 	// process targets & registrees that unregistered.

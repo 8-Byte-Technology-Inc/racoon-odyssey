@@ -41,7 +41,7 @@ public:
 	EventMessage_MoveStart(s32 dx, s32 dy);
 
 	static EventMessage_MoveStart* Alloc(s32 dx, s32 dy);
-	virtual void __free() override;
+	virtual void __Free() override;
 
 	s32 m_dx;
 	s32 m_dy;
@@ -54,7 +54,7 @@ public:
 	EventMessage_MoveEnd(s32 dx, s32 dy);
 
 	static EventMessage_MoveEnd* Alloc(s32 dx, s32 dy);
-	virtual void __free() override;
+	virtual void __Free() override;
 
 	s32 m_dx;
 	s32 m_dy;
@@ -67,7 +67,7 @@ public:
 	EventMessage_ResizeWindow(s32 sizeX, s32 sizeY, bool final);
 
 	static EventMessage_ResizeWindow* Alloc(s32 sizeX, s32 sizeY, bool final);
-	virtual void __free() override;
+	virtual void __Free() override;
 
 	s32 m_sizeX;
 	s32 m_sizeY;
@@ -81,7 +81,7 @@ public:
 	EventMessage_RenderAreaResize(s32 dpi, RenderScaleSize scale, const IVector2& size);
 
 	static EventMessage_RenderAreaResize* Alloc(s32 dpi, RenderScaleSize scale, const IVector2& size);
-	virtual void __free() override;
+	virtual void __Free() override;
 
 	s32 m_dpi;
 	RenderScaleSize m_scale;
@@ -95,7 +95,7 @@ public:
 	EventMessage_WindowDPIChanged(const IVector2& dpi, const IVector2& size);
 
 	static EventMessage_WindowDPIChanged* Alloc(const IVector2& dpi, const IVector2& size);
-	virtual void __free() override;
+	virtual void __Free() override;
 
 	IVector2 m_dpi;
 	IVector2 m_size;
@@ -108,7 +108,7 @@ public:
 	EventMessage_Activate();
 
 	static EventMessage_Activate* Alloc();
-	virtual void __free() override;
+	virtual void __Free() override;
 };
 
 // EventMessageID_Rotate
@@ -118,7 +118,7 @@ public:
 	EventMessage_Rotate();
 
 	static EventMessage_Rotate* Alloc();
-	virtual void __free() override;
+	virtual void __Free() override;
 };
 
 // EventMessageID_Close
@@ -128,7 +128,7 @@ public:
 	EventMessage_Close();
 
 	static EventMessage_Close* Alloc();
-	virtual void __free() override;
+	virtual void __Free() override;
 };
 
 // EventMessage_MouseCursorMove
@@ -138,7 +138,7 @@ public:
 	EventMessage_MouseCursorMove(s32 mouseX, s32 mouseY);
 
 	static EventMessage_MouseCursorMove* Alloc(s32 mouseX, s32 mouseY);
-	virtual void __free() override;
+	virtual void __Free() override;
 
 	s32 m_mouseX;
 	s32 m_mouseY;
@@ -151,7 +151,7 @@ public:
 	EventMessage_MouseLBDown(s32 mouseX, s32 mouseY);
 
 	static EventMessage_MouseLBDown* Alloc(s32 mouseX, s32 mouseY);
-	virtual void __free() override;
+	virtual void __Free() override;
 
 	s32 m_mouseX;
 	s32 m_mouseY;
@@ -164,7 +164,7 @@ public:
 	EventMessage_MouseLBDownHold(u32 frameCount, const IVector2& mousePos);
 
 	static EventMessage_MouseLBDownHold* Alloc(u32 frameCount, const IVector2& mousePos);
-	virtual void __free() override;
+	virtual void __Free() override;
 
 	u32 m_frameCount;
 	IVector2 m_mousePos;
@@ -177,7 +177,7 @@ public:
 	EventMessage_MouseLBDoubleClick(const IVector2& mousePos);
 
 	static EventMessage_MouseLBDoubleClick* Alloc(const IVector2& mousePos);
-	virtual void __free() override;
+	virtual void __Free() override;
 
 	IVector2 m_mousePos;
 };
@@ -189,7 +189,7 @@ public:
 	EventMessage_MouseLBUp(s32 mouseX, s32 mouseY);
 
 	static EventMessage_MouseLBUp* Alloc(s32 mouseX, s32 mouseY);
-	virtual void __free() override;
+	virtual void __Free() override;
 
 	s32 m_mouseX;
 	s32 m_mouseY;
@@ -202,7 +202,7 @@ public:
 	EventMessage_MouseLeave(const IVector2& mousePos);
 
 	static EventMessage_MouseLeave* Alloc(const IVector2& mousePos);
-	virtual void __free() override;
+	virtual void __Free() override;
 
 	IVector2 m_mousePos;
 };
@@ -214,7 +214,7 @@ public:
 	EventMessage_MouseHover(const IVector2& mousePos);
 
 	static EventMessage_MouseHover* Alloc(const IVector2& mousePos);
-	virtual void __free() override;
+	virtual void __Free() override;
 
 	IVector2 m_mousePos;
 };
@@ -226,7 +226,7 @@ public:
 	EventMessage_MouseMoveWheel(const IVector2& mousePos, s32 delta, s32 threshold);
 
 	static EventMessage_MouseMoveWheel* Alloc(const IVector2& mousePos, s32 delta, s32 threshold);
-	virtual void __free() override;
+	virtual void __Free() override;
 
 	IVector2 m_mousePos;
 	s32 m_delta;

@@ -13,24 +13,30 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Shaders">
+      <UniqueIdentifier>{fcb84b96-5d15-446e-b94b-669d013759ce}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="basic_types.h">
+    <ClInclude Include="RenderMain.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="memory.h">
+    <ClInclude Include="RenderShaders.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="ref_count.h">
+    <ClInclude Include="RenderHelper.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="file_io.h">
+    <ClInclude Include="RenderModel.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="parse_xml.h">
+    <ClInclude Include="RenderTexture.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="RenderScale.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -38,20 +44,34 @@
     <ClCompile Include="pch.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="basic_types.cpp">
+    <ClCompile Include="RenderMain.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="memory.cpp">
+    <ClCompile Include="RenderShaders.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="ref_count.cpp">
+    <ClCompile Include="RenderHelper.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="file_io.cpp">
+    <ClCompile Include="RenderModel.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="parse_xml.cpp">
+    <ClCompile Include="RenderModel_DAE.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="RenderTexture.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="RenderScale.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="GenericPixelShader.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="GenericVertexShader.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>
