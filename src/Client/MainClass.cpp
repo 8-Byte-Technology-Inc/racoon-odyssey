@@ -143,7 +143,7 @@ void MainClass::Initialize()
 	m_pRenderer = TB8::RenderMain::Alloc(m_hWnd, m_pClientGlobals);
 
 	// load a model.
-	m_pModel = TB8::RenderModel::AllocFromDAE(m_pRenderer, m_pClientGlobals->GetPathAssets().c_str(), "robot/robot_loader.dae", "Robot");
+	m_pModel = TB8::RenderModel::AllocFromDAE(m_pRenderer, m_pClientGlobals->GetPathAssets().c_str(), "mooey/mooey.dae", "Mooey");
 
 	// initialize globals.
 	m_pClientGlobals->Initialize(m_pRenderer);
@@ -225,8 +225,13 @@ void MainClass::__UpdateModelPosition()
 	const std::vector<TB8::RenderModel_Mesh>& meshes = m_pModel->GetMeshes();
 	const TB8::RenderModel_Mesh& primaryMesh = meshes.front();
 	const f32 rotation = static_cast<f32>(m_pClientGlobals->GetCurrentFrameCount() % 360);
-	const u32 animIndex = ((m_pClientGlobals->GetCurrentFrameCount() / 5) % (anims.size() - 1)) + 1;
-	const TB8::RenderModel_Anims& anim = anims[animIndex];
+	u32 animID = 0;
+	if (!anims.empty())
+	{
+		const u32 animIndex = ((m_pClientGlobals->GetCurrentFrameCount() / 5) % (anims.size() - 1)) + 1;
+		const TB8::RenderModel_Anims& anim = anims[animIndex];
+		animID = anim.m_animID;
+	}
 
 	const Vector3& size = primaryMesh.m_size;
 	f32 scaleX = static_cast<f32>(480) / size.x;
@@ -236,7 +241,7 @@ void MainClass::__UpdateModelPosition()
 
 	m_pModel->SetScale(Vector3(scale, scale, scale));
 	m_pModel->SetRotation(Vector3(0.f, DirectX::XM_PI * static_cast<f32>(rotation) / 180.f, 0.f));
-	m_pModel->SetAnimID(anim.m_animID);
+	m_pModel->SetAnimID(animID);
 }
 
 void MainClass::__SetRenderCamera()
