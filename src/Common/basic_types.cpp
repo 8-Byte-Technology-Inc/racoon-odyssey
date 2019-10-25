@@ -488,8 +488,8 @@ void Matrix4::SetRotateX(const f32 rad)
 {
 	Clear();
 
-	const f32 s = sin(rad);
-	const f32 c = cos(rad);
+	const f32 s = static_cast<f32>(sin(rad));
+	const f32 c = static_cast<f32>(cos(rad));
 
 	m[0][0] = 1.0f;
 	m[1][1] = c;
@@ -503,8 +503,8 @@ void Matrix4::SetRotateY(const f32 rad)
 {
 	Clear();
 
-	const f32 s = sin(rad);
-	const f32 c = cos(rad);
+	const f32 s = static_cast<f32>(sin(rad));
+	const f32 c = static_cast<f32>(cos(rad));
 
 	m[0][0] = c;
 	m[0][2] = 0.0f - s;
@@ -518,8 +518,8 @@ void Matrix4::SetRotateZ(const f32 rad)
 {
 	Clear();
 
-	const f32 s = sin(rad);
-	const f32 c = cos(rad);
+	const f32 s = static_cast<f32>(sin(rad));
+	const f32 c = static_cast<f32>(cos(rad));
 
 	m[0][0] = c;
 	m[0][1] = s;
@@ -603,9 +603,9 @@ Matrix4 Matrix4::Transpose(const Matrix4& a)
 
 Matrix4 Matrix4::ExtractRotation(const Matrix4& a)
 {
-	const f32 sx = sqrt(a.m[0][0] * a.m[0][0] + a.m[1][0] * a.m[1][0] + a.m[2][0] * a.m[2][0]);
-	const f32 sy = sqrt(a.m[0][1] * a.m[0][1] + a.m[1][1] * a.m[1][1] + a.m[2][1] * a.m[2][1]);
-	const f32 sz = sqrt(a.m[0][2] * a.m[0][2] + a.m[1][2] * a.m[1][2] + a.m[2][2] * a.m[2][2]);
+	const f32 sx = static_cast<f32>(sqrt(a.m[0][0] * a.m[0][0] + a.m[1][0] * a.m[1][0] + a.m[2][0] * a.m[2][0]));
+	const f32 sy = static_cast<f32>(sqrt(a.m[0][1] * a.m[0][1] + a.m[1][1] * a.m[1][1] + a.m[2][1] * a.m[2][1]));
+	const f32 sz = static_cast<f32>(sqrt(a.m[0][2] * a.m[0][2] + a.m[1][2] * a.m[1][2] + a.m[2][2] * a.m[2][2]));
 
 	Matrix4 out;
 	out.m[0][0] = a.m[0][0] / sx;

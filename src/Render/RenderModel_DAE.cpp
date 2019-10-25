@@ -496,9 +496,9 @@ void RenderModel::__InitializeFromDAE(RenderMain* pRenderer, const char* path, c
 					RenderModel_DAE_Effect& effect = userCtx.m_effects[material.m_effectIndex];
 
 					const f32 gamma = 1.f / 2.2f;
-					color.x = pow(effect.m_diffuse.x + effect.m_specular.x, gamma);
-					color.y = pow(effect.m_diffuse.y + effect.m_specular.y, gamma);
-					color.z = pow(effect.m_diffuse.z + effect.m_specular.z, gamma);
+					color.x = static_cast<f32>(pow(effect.m_diffuse.x + effect.m_specular.x, gamma));
+					color.y = static_cast<f32>(pow(effect.m_diffuse.y + effect.m_specular.y, gamma));
+					color.z = static_cast<f32>(pow(effect.m_diffuse.z + effect.m_specular.z, gamma));
 					color.w = std::min<f32>(/*effect.m_emission.w + */effect.m_diffuse.w + effect.m_specular.w, 1.f);
 
 					textureIndex = effect.m_textureIndex;
