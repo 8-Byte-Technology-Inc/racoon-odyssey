@@ -31,6 +31,7 @@ enum RenderModel_DAE_InputSemantic : s32
 struct RenderModel_DAE_Texture
 {
 	std::string m_id;
+	u32 m_index;
 	std::string m_path;
 };
 
@@ -40,6 +41,7 @@ struct RenderModel_DAE_Effect
 	DirectX::XMFLOAT4 m_emission;
 	DirectX::XMFLOAT4 m_diffuse;
 	DirectX::XMFLOAT4 m_specular;
+	std::string m_textureID;
 	s32 m_textureIndex;
 
 	RenderModel_DAE_Effect()
@@ -53,6 +55,7 @@ struct RenderModel_DAE_Effect
 		ZeroMemory(&m_emission, sizeof(m_emission));
 		ZeroMemory(&m_diffuse, sizeof(m_diffuse));
 		ZeroMemory(&m_specular, sizeof(m_specular));
+		m_textureID.clear();
 		m_textureIndex = -1;
 	}
 };
@@ -338,6 +341,23 @@ void RenderModel::__InitializeFromDAE(RenderMain* pRenderer, const char* path, c
 		modelCenter.SetTranslation(Vector3(-m_center.x, -m_center.y, -m_center.z));
 
 		m_coordTranslate = Matrix4::MultiplyAB(userCtx.m_coordTranslate, modelCenter);
+	}
+
+	// connect effect textures.
+	for (std::vector<RenderModel_DAE_Effect>::iterator itEffect = userCtx.m_effects.begin(); itEffect != userCtx.m_effects.end(); ++itEffect)
+	{
+		RenderModel_DAE_Effect& effect = *itEffect;
+		if (!effect.m_textureID.empty())
+		{
+			for (std::vector<RenderModel_DAE_Texture>::iterator itTexture = userCtx.m_textures.begin(); itTexture != userCtx.m_textures.end(); ++itTexture)
+			{
+				RenderModel_DAE_Texture& texture = *itTexture;
+				if (texture.m_id != effect.m_textureID)
+					continue;
+				effect.m_textureIndex = static_cast<s32>(texture.m_index);
+				break;
+			}
+		}
 	}
 
 	// build list of meshes.
@@ -1686,6 +1706,7 @@ void RenderModel::__ParseDataSet_TextureFileName(RenderModel_DAE_ParseContext* c
 	RenderModel_DAE_Texture data;
 	data.m_id = ctx->m_idStack.back().second;
 	data.m_path = imageFilePath;
+	data.m_index = static_cast<u32>(ctx->m_textures.size());
 
 	ctx->m_textures.push_back(data);
 	ctx->m_buffer.clear();
@@ -1988,15 +2009,7 @@ void RenderModel::__ParseDataSet_EffectTexture(RenderModel_DAE_ParseContext* ctx
 	if (ctx->m_buffer.empty())
 		return;
 
-	s32 index = 0;
-	for (std::vector<RenderModel_DAE_Texture>::iterator it = ctx->m_textures.begin(); it != ctx->m_textures.end(); ++it, ++index)
-	{
-		if (it->m_id == ctx->m_buffer)
-		{
-			ctx->m_tempEffect.m_textureIndex = index;
-			break;
-		}
-	}
+	ctx->m_tempEffect.m_textureID = ctx->m_buffer;
 	ctx->m_buffer.clear();
 }
 
