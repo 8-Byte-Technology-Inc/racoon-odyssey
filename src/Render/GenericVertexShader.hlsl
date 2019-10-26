@@ -11,7 +11,17 @@ cbuffer VSConstants1
 {
 	matrix worldMatrix;
 	matrix worldNormalMatrix;
+};
+
+cbuffer VSConstants2
+{
 	int animIndex;
+};
+
+cbuffer VSConstants3
+{
+	matrix jointMatrix[16];
+	matrix jointNormalMatrix[16];
 };
 
 Texture2D<float> g_boneTexture;
@@ -84,10 +94,35 @@ PixelInputType GenericVertexShader(VertexInputType input)
 	inputNormal.z = input.normal.z;
 	inputNormal.w = 1.0f;
 
-	if (animIndex < 0 || input.bones.x < 0)
+	if (input.bones.x < 0)
 	{
 		output.position = inputPosition;
 		output.normalWC = inputNormal;
+	}
+	else if (animIndex < 0)
+	{
+		output.position = mul(inputPosition, jointMatrix[input.bones.x]) * input.weights.x;
+		output.normalWC = mul(inputNormal, jointNormalMatrix[input.bones.x]) * input.weights.x;
+
+		if (input.bones.y >= 0)
+		{
+			output.position += mul(inputPosition, jointMatrix[input.bones.y]) * input.weights.y;
+			output.normalWC += mul(inputNormal, jointNormalMatrix[input.bones.y]) * input.weights.y;
+
+			if (input.bones.z >= 0)
+			{
+				output.position += mul(inputPosition, jointMatrix[input.bones.z]) * input.weights.z;
+				output.normalWC += mul(inputNormal, jointNormalMatrix[input.bones.z]) * input.weights.z;
+
+				if (input.bones.w >= 0)
+				{
+					output.position += mul(inputPosition, jointMatrix[input.bones.w]) * input.weights.w;
+					output.normalWC += mul(inputNormal, jointNormalMatrix[input.bones.w]) * input.weights.w;
+				}
+			}
+
+			output.normalWC = normalize(output.normalWC);
+		}
 	}
 	else
 	{

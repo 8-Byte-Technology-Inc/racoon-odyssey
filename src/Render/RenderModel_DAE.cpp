@@ -201,6 +201,7 @@ struct RenderModel_DAE_Mesh
 	std::vector<RenderModel_DAE_Triangle>	m_meshTriangles;
 	std::vector<Vector2>					m_meshMap;
 
+	Matrix4									m_bindShapeMatrix;
 	std::vector<RenderModel_DAE_SkinJoint>	m_skinJoints;
 	std::vector<RenderModel_DAE_SkinWeight> m_skinWeights;
 	std::vector<s32>						m_vertexWeightCounts;
@@ -283,7 +284,7 @@ struct RenderModel_DAE_ParseContext
 	fnParseBuffer m_fnParseBuffer;
 	fnParseDataSet m_fnParseDataSet;
 
-	Vector3 m_baseJointVector;
+	Matrix4									m_baseJointMatrix;
 	std::vector<RenderModel_DAE_Texture>	m_textures;
 	std::vector<RenderModel_DAE_Effect>		m_effects;
 	std::vector<RenderModel_DAE_Material>	m_materials;
@@ -385,6 +386,38 @@ void RenderModel::__InitializeFromDAE(RenderMain* pRenderer, const char* path, c
 	// get a reference to the shader.
 	m_pShader = pRenderer->GetShaderByID(RenderShaderID_Generic);
 	m_pShader->AddRef();
+
+	// cache joints.
+	if (!userCtx.m_meshes.empty())
+	{
+		RenderModel_DAE_Mesh& mesh = userCtx.m_meshes.front();
+		m_cJoints = static_cast<u32>(mesh.m_skinJoints.size());
+		assert(m_cJoints <= ARRAYSIZE(m_joints));
+
+		m_baseJointMatrix = userCtx.m_baseJointMatrix;
+		m_bindShapeMatrix = mesh.m_bindShapeMatrix;
+
+		Matrix4 x1 = Matrix4::MultiplyAB(mesh.m_skinJoints[0].m_jointMatrix, mesh.m_skinJoints[0].m_invBindMatrix);
+		Matrix4 x2 = Matrix4::MultiplyAB(m_baseJointMatrix, mesh.m_bindShapeMatrix);
+
+		for (std::vector<RenderModel_DAE_SkinJoint>::iterator itJoint = mesh.m_skinJoints.begin(); itJoint != mesh.m_skinJoints.end(); ++itJoint)
+		{
+			const RenderModel_DAE_SkinJoint& src = *itJoint;
+			assert(src.m_index < ARRAYSIZE(m_joints));
+			assert(src.m_parent < src.m_index);
+			RenderModel_Joint& dst = m_joints[src.m_index];
+
+			dst.m_index = src.m_index;
+			dst.m_parentIndex = src.m_parent;
+
+			dst.m_baseMatrix = src.m_jointMatrix;
+			dst.m_baseInvBindMatrix = src.m_invBindMatrix;
+
+			dst.m_isDirty = true;
+			dst.m_rotateMatrix.SetIdentity();
+			dst.m_computedMatrix.SetIdentity();
+		}
+	}
 
 	// setup anims.
 	if (!userCtx.m_animIDMap.empty())
@@ -743,7 +776,7 @@ void RenderModel::__InitializeFromDAE(RenderMain* pRenderer, const char* path, c
 	assert(hr == S_OK);
 
 	// init constant buffer.
-	__InitVSConstantBuffer();
+	__InitVSConstantBuffers();
 }
 
 void RenderModel::__UpdateLimits(RenderModel_DAE_Mesh& mesh, const Vector3& src)
@@ -888,7 +921,7 @@ Matrix4 RenderModel::__ComputeJointModelTransform(RenderModel_DAE_ParseContext& 
 	}
 	else
 	{
-		parentJointModelTransform.SetTranslation(parseContext.m_baseJointVector);
+		parentJointModelTransform = parseContext.m_baseJointMatrix;
 	}
 
 	RenderModel_DAE_Anim_Transform* pAnimTransform = __LookupAnimTransform(parseContext, joint.m_name.c_str(), animID);
@@ -1251,6 +1284,20 @@ void RenderModel::__ParseDAEStartElement(void *_ctx, const u8* name, const u8** 
 		}
 	}
 
+	// bind shape matrix.
+	if (ctx->m_pMesh
+		&& (ctx->m_tagStack.size() == 5)
+		&& (_stricmp(ctx->m_tagStack[0].c_str(), "COLLADA") == 0)
+		&& (_stricmp(ctx->m_tagStack[1].c_str(), "library_controllers") == 0)
+		&& (_stricmp(ctx->m_tagStack[2].c_str(), "controller") == 0)
+		&& (_stricmp(ctx->m_tagStack[3].c_str(), "skin") == 0)
+		&& (_stricmp(ctx->m_tagStack[4].c_str(), "bind_shape_matrix") == 0))
+	{
+		ctx->m_fnParseChars = &__ParseChars_Numbers;
+		ctx->m_fnParseBuffer = &__ParseBuffer_F32;
+		ctx->m_fnParseDataSet = &__ParseDataSet_BindShapeMatrix;
+	}
+
 	// joint names.
 	if (ctx->m_pMesh
 		&& (ctx->m_tagStack.size() == 6)
@@ -1323,23 +1370,6 @@ void RenderModel::__ParseDAEStartElement(void *_ctx, const u8* name, const u8** 
 			ctx->m_vertexIndex = 0;
 		}
 	}
-
-#if 0
-	// armature base joint matrix
-	if ((ctx->m_tagStack.size() == 5)
-		&& (_stricmp(ctx->m_tagStack[0].c_str(), "COLLADA") == 0)
-		&& (_stricmp(ctx->m_tagStack[1].c_str(), "library_visual_scenes") == 0)
-		&& (_stricmp(ctx->m_tagStack[2].c_str(), "visual_scene") == 0)
-		&& (_stricmp(ctx->m_tagStack[3].c_str(), "node") == 0)
-		&& (_stricmp(ctx->m_tagStack[4].c_str(), "translate") == 0)
-		&& (ctx->m_idStack.size() == 2)
-		&& (ctx->m_idStack[1].second.find("Armature") != std::string::npos))
-	{
-		ctx->m_fnParseChars = &__ParseChars_Numbers;
-		ctx->m_fnParseBuffer = &__ParseBuffer_F32;
-		ctx->m_fnParseDataSet = &__ParseDataSet_BaseJointVector;
-	}
-#endif
 
 	// armature joint node.
 	if ((ctx->m_tagStack.size() >= 5)
@@ -1726,6 +1756,34 @@ void RenderModel::__ParseDataSet_JointName(RenderModel_DAE_ParseContext* ctx)
 	ctx->m_buffer.clear();
 }
 
+void RenderModel::__ParseDataSet_BindShapeMatrix(RenderModel_DAE_ParseContext* ctx)
+{
+	if (ctx->m_f32.size() < 16)
+		return;
+
+	Matrix4 matrix1;
+	matrix1.m[0][0] = ctx->m_f32[0];
+	matrix1.m[1][0] = ctx->m_f32[1];
+	matrix1.m[2][0] = ctx->m_f32[2];
+	matrix1.m[3][0] = ctx->m_f32[3];
+	matrix1.m[0][1] = ctx->m_f32[4];
+	matrix1.m[1][1] = ctx->m_f32[5];
+	matrix1.m[2][1] = ctx->m_f32[6];
+	matrix1.m[3][1] = ctx->m_f32[7];
+	matrix1.m[0][2] = ctx->m_f32[8];
+	matrix1.m[1][2] = ctx->m_f32[9];
+	matrix1.m[2][2] = ctx->m_f32[10];
+	matrix1.m[3][2] = ctx->m_f32[11];
+	matrix1.m[0][3] = ctx->m_f32[12];
+	matrix1.m[1][3] = ctx->m_f32[13];
+	matrix1.m[2][3] = ctx->m_f32[14];
+	matrix1.m[3][3] = ctx->m_f32[15];
+
+	ctx->m_pMesh->m_bindShapeMatrix = matrix1;
+
+	ctx->m_f32.clear();
+}
+
 void RenderModel::__ParseDataSet_JointInvBindMatrix(RenderModel_DAE_ParseContext* ctx)
 {
 	if (ctx->m_f32.size() < 16)
@@ -1824,18 +1882,6 @@ void RenderModel::__ParseDataSet_VertexWeights(RenderModel_DAE_ParseContext* ctx
 
 	ctx->m_vertexIndex++;
 	ctx->m_s32.clear();
-}
-
-void RenderModel::__ParseDataSet_BaseJointVector(RenderModel_DAE_ParseContext* ctx)
-{
-	if (ctx->m_f32.size() < 3)
-		return;
-
-	ctx->m_baseJointVector.x = ctx->m_f32[0];
-	ctx->m_baseJointVector.y = ctx->m_f32[1];
-	ctx->m_baseJointVector.z = ctx->m_f32[2];
-
-	ctx->m_f32.clear();
 }
 
 void RenderModel::__ParseDataSet_JointMatrix(RenderModel_DAE_ParseContext* ctx)
@@ -2105,15 +2151,13 @@ void RenderModel::__ParseDAEEndElement(void *_ctx, const u8* name)
 		&& (_stricmp(ctx->m_tagStack[1].c_str(), "library_visual_scenes") == 0)
 		&& (_stricmp(ctx->m_tagStack[2].c_str(), "visual_scene") == 0)
 		&& (_stricmp(ctx->m_tagStack[3].c_str(), "node") == 0)
-		&& (_stricmp(ctx->m_tagStack[4].c_str(), "translate") == 0)
+		&& ((_stricmp(ctx->m_tagStack[4].c_str(), "translate") == 0)
+			|| (_stricmp(ctx->m_tagStack[4].c_str(), "matrix") == 0))
 		&& (ctx->m_idStack.size() == 2)
 		&& (ctx->m_idStack[1].second.find("Armature") != std::string::npos)
 		&& !ctx->m_transformStack.empty())
 	{
-		const Matrix4& m = ctx->m_transformStack.back().second;
-		ctx->m_baseJointVector.x = m.m[3][0];
-		ctx->m_baseJointVector.y = m.m[3][1];
-		ctx->m_baseJointVector.z = m.m[3][2];
+		ctx->m_baseJointMatrix = ctx->m_transformStack.back().second;
 	}
 
 	// armature joint matrix

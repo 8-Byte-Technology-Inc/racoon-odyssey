@@ -221,17 +221,13 @@ void MainClass::__ProcessRenderFrame(s32 frameCount)
 
 void MainClass::__UpdateModelPosition()
 {
-	const std::vector<TB8::RenderModel_Anims>& anims = m_pModel->GetAnims();
 	const std::vector<TB8::RenderModel_Mesh>& meshes = m_pModel->GetMeshes();
 	const TB8::RenderModel_Mesh& primaryMesh = meshes.front();
 	const f32 rotation = static_cast<f32>(m_pClientGlobals->GetCurrentFrameCount() % 360);
-	u32 animID = 0;
-	if (!anims.empty())
-	{
-		const u32 animIndex = ((m_pClientGlobals->GetCurrentFrameCount() / 5) % (anims.size() - 1)) + 1;
-		const TB8::RenderModel_Anims& anim = anims[animIndex];
-		animID = anim.m_animID;
-	}
+	const f32 rotation_armL = static_cast<f32>(sin((static_cast<f32>(m_pClientGlobals->GetCurrentFrameCount()) / 3.f))) * 25.f;
+	const f32 rotation_armR = static_cast<f32>(sin((static_cast<f32>(m_pClientGlobals->GetCurrentFrameCount()) / 3.1f) + 0.1)) * 25.f;
+	const f32 rotation_legL = static_cast<f32>(sin((static_cast<f32>(m_pClientGlobals->GetCurrentFrameCount()) / 3.2f) + 0.2)) * 25.f;
+	const f32 rotation_legR = static_cast<f32>(sin((static_cast<f32>(m_pClientGlobals->GetCurrentFrameCount()) / 3.3f) + 0.3)) * 25.f;
 
 	const Vector3& size = primaryMesh.m_size;
 	f32 scaleX = static_cast<f32>(480) / size.x;
@@ -241,7 +237,18 @@ void MainClass::__UpdateModelPosition()
 
 	m_pModel->SetScale(Vector3(scale, scale, scale));
 	m_pModel->SetRotation(Vector3(0.f, DirectX::XM_PI * static_cast<f32>(rotation) / 180.f, 0.f));
-	m_pModel->SetAnimID(animID);
+
+	// left arm
+	m_pModel->SetJointRotation(8, Vector3(DirectX::XM_PI * static_cast<f32>(rotation_armL) / 180.f, 0.f, 0.f));
+
+	// right arm
+	m_pModel->SetJointRotation(6, Vector3(DirectX::XM_PI * static_cast<f32>(rotation_armR) / 180.f, 0.f, 0.f));
+
+	// left leg
+	m_pModel->SetJointRotation(2, Vector3(DirectX::XM_PI * static_cast<f32>(rotation_legL) / 180.f, 0.f, 0.f));
+
+	// right leg
+	m_pModel->SetJointRotation(4, Vector3(DirectX::XM_PI * static_cast<f32>(rotation_legR) / 180.f, 0.f, 0.f));
 }
 
 void MainClass::__SetRenderCamera()

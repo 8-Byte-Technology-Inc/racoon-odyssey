@@ -27,8 +27,12 @@ RenderModel::RenderModel(RenderMain* pRenderer)
 	, m_scale(Vector3(1.f, 1.f, 1.f))
 	, m_rotation(Vector3(0.f, 0.f, 0.f))
 	, m_animIndex(-1)
+	, m_cJoints(0)
+	, m_isJointsDirty(false)
 	, m_pBoneTexture(nullptr)
-	, m_pVSConstantBuffer(nullptr)
+	, m_pVSConstantBuffer_World(nullptr)
+	, m_pVSConstantBuffer_Anim(nullptr)
+	, m_pVSConstantBuffer_Joints(nullptr)
 {
 	m_coordTranslate.SetIdentity();
 	m_worldTransform.SetIdentity();
@@ -36,7 +40,9 @@ RenderModel::RenderModel(RenderMain* pRenderer)
 
 RenderModel::~RenderModel()
 {
-	RELEASEI(m_pVSConstantBuffer);
+	RELEASEI(m_pVSConstantBuffer_Joints);
+	RELEASEI(m_pVSConstantBuffer_Anim);
+	RELEASEI(m_pVSConstantBuffer_World);
 	RELEASEI(m_pBoneTexture);
 	RELEASEI(m_pShader);
 	RELEASEI(m_pTexture);
@@ -92,8 +98,16 @@ void RenderModel::Render(RenderMain* pRenderer)
 		m_pShader->SetBoneTexture(m_pBoneTexture);
 	}
 
+	// update joints, if dirty.
+	if (m_isJointsDirty)
+	{
+		__UpdateVSConstants_Joints();
+	}
+
 	// set model constants, which includes the world transform & animation index.
-	m_pShader->SetModelVSConstants(m_pVSConstantBuffer);
+	m_pShader->SetModelVSConstants_World(m_pVSConstantBuffer_World);
+	m_pShader->SetModelVSConstants_Anim(m_pVSConstantBuffer_Anim);
+	m_pShader->SetModelVSConstants_Joints(m_pVSConstantBuffer_Joints);
 
 	// set the world transform.
 	//m_pShader->SetWorldTransform(m_worldTransform);
@@ -118,7 +132,7 @@ void RenderModel::SetPosition(const Vector3& position)
 		return;
 
 	m_position = position;
-	__UpdateVSConstants(); 
+	__UpdateVSConstants_World();
 }
 
 void RenderModel::SetRotation(const Vector3& rotation) 
@@ -127,7 +141,7 @@ void RenderModel::SetRotation(const Vector3& rotation)
 		return;
 
 	m_rotation = rotation;
-	__UpdateVSConstants(); 
+	__UpdateVSConstants_World();
 }
 
 void RenderModel::SetScale(const Vector3& scale) 
@@ -136,7 +150,7 @@ void RenderModel::SetScale(const Vector3& scale)
 		return;
 
 	m_scale = scale;
-	__UpdateVSConstants(); 
+	__UpdateVSConstants_World();
 }
 
 void RenderModel::SetAnimID(const s32 animID)
@@ -155,7 +169,20 @@ void RenderModel::SetAnimID(const s32 animID)
 		}
 	}
 
-	__UpdateVSConstants();
+	__UpdateVSConstants_Anim();
+}
+
+void RenderModel::SetJointRotation(u32 index, const Vector3& rotation)
+{
+	assert(index < m_cJoints);
+	if (index == 0)
+		return;
+
+	RenderModel_Joint& joint = m_joints[index];
+
+	joint.m_rotateMatrix.SetRotate(rotation);
+	joint.m_isDirty = true;
+	m_isJointsDirty = true;
 }
 
 void RenderModel::GetNamedVerticies(std::vector<RenderModel_NamedVertex>* pVerticies) const
@@ -171,31 +198,73 @@ void RenderModel::GetNamedVerticies(std::vector<RenderModel_NamedVertex>* pVerti
 	}
 }
 
-void RenderModel::__InitVSConstantBuffer()
+void RenderModel::__InitVSConstantBuffers()
 {
 	HRESULT hr = S_OK;
 
-	D3D11_BUFFER_DESC constantBufferDesc;
-	ZeroMemory(&constantBufferDesc, sizeof(constantBufferDesc));
-	constantBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
-	constantBufferDesc.ByteWidth = ((sizeof(RenderShaders_Model_VSConstantants) + 15) / 16) * 16;
-	constantBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-	constantBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-	constantBufferDesc.MiscFlags = 0;
-	constantBufferDesc.StructureByteStride = 0;
+	{
+		D3D11_BUFFER_DESC constantBufferDesc;
+		ZeroMemory(&constantBufferDesc, sizeof(constantBufferDesc));
+		constantBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
+		constantBufferDesc.ByteWidth = ((sizeof(RenderShaders_Model_VSConstantants_World) + 15) / 16) * 16;
+		constantBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+		constantBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+		constantBufferDesc.MiscFlags = 0;
+		constantBufferDesc.StructureByteStride = 0;
 
-	assert(m_pVSConstantBuffer == nullptr);
-	hr = m_pRenderer->GetDevice()->CreateBuffer(
-		&constantBufferDesc,
-		nullptr,
-		&m_pVSConstantBuffer
-	);
-	assert(hr == S_OK);
+		assert(m_pVSConstantBuffer_World == nullptr);
+		hr = m_pRenderer->GetDevice()->CreateBuffer(
+			&constantBufferDesc,
+			nullptr,
+			&m_pVSConstantBuffer_World
+		);
+		assert(hr == S_OK);
+	}
 
-	__UpdateVSConstants();
+	{
+		D3D11_BUFFER_DESC constantBufferDesc;
+		ZeroMemory(&constantBufferDesc, sizeof(constantBufferDesc));
+		constantBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
+		constantBufferDesc.ByteWidth = ((sizeof(RenderShaders_Model_VSConstantants_Anim) + 15) / 16) * 16;
+		constantBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+		constantBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+		constantBufferDesc.MiscFlags = 0;
+		constantBufferDesc.StructureByteStride = 0;
+
+		assert(m_pVSConstantBuffer_Anim == nullptr);
+		hr = m_pRenderer->GetDevice()->CreateBuffer(
+			&constantBufferDesc,
+			nullptr,
+			&m_pVSConstantBuffer_Anim
+		);
+		assert(hr == S_OK);
+	}
+
+	{
+		D3D11_BUFFER_DESC constantBufferDesc;
+		ZeroMemory(&constantBufferDesc, sizeof(constantBufferDesc));
+		constantBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
+		constantBufferDesc.ByteWidth = ((sizeof(RenderShaders_Model_VSConstantants_Joints) + 15) / 16) * 16;
+		constantBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+		constantBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+		constantBufferDesc.MiscFlags = 0;
+		constantBufferDesc.StructureByteStride = 0;
+
+		assert(m_pVSConstantBuffer_Joints == nullptr);
+		hr = m_pRenderer->GetDevice()->CreateBuffer(
+			&constantBufferDesc,
+			nullptr,
+			&m_pVSConstantBuffer_Joints
+		);
+		assert(hr == S_OK);
+	}
+
+	__UpdateVSConstants_World();
+	__UpdateVSConstants_Anim();
+	__UpdateVSConstants_Joints();
 }
 
-void RenderModel::__UpdateVSConstants()
+void RenderModel::__UpdateVSConstants_World()
 {
 	HRESULT hr = S_OK;
 
@@ -212,11 +281,11 @@ void RenderModel::__UpdateVSConstants()
 
 	// Lock the constant buffer so it can be written to.
 	D3D11_MAPPED_SUBRESOURCE mappedResource;
-	hr = m_pRenderer->GetDeviceContext()->Map(m_pVSConstantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+	hr = m_pRenderer->GetDeviceContext()->Map(m_pVSConstantBuffer_World, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
 	assert(hr == S_OK);
 
 	// Get a pointer to the data in the constant buffer.
-	RenderShaders_Model_VSConstantants* dataPtr = reinterpret_cast<RenderShaders_Model_VSConstantants*>(mappedResource.pData);
+	RenderShaders_Model_VSConstantants_World* dataPtr = reinterpret_cast<RenderShaders_Model_VSConstantants_World*>(mappedResource.pData);
 
 	// model -> world (verticies)
 	{
@@ -240,11 +309,98 @@ void RenderModel::__UpdateVSConstants()
 		DirectX::XMStoreFloat4x4(&(dataPtr->worldNormalMatrix), worldNormalMatrix2);
 	}
 
+	// Unlock the constant buffer.
+	m_pRenderer->GetDeviceContext()->Unmap(m_pVSConstantBuffer_World, 0);
+}
+
+void RenderModel::__UpdateVSConstants_Anim()
+{
+	HRESULT hr = S_OK;
+
+	// Lock the constant buffer so it can be written to.
+	D3D11_MAPPED_SUBRESOURCE mappedResource;
+	hr = m_pRenderer->GetDeviceContext()->Map(m_pVSConstantBuffer_Anim, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+	assert(hr == S_OK);
+
+	// Get a pointer to the data in the constant buffer.
+	RenderShaders_Model_VSConstantants_Anim* dataPtr = reinterpret_cast<RenderShaders_Model_VSConstantants_Anim*>(mappedResource.pData);
+
 	// anim index.
 	dataPtr->animIndex = m_animIndex;
 
 	// Unlock the constant buffer.
-	m_pRenderer->GetDeviceContext()->Unmap(m_pVSConstantBuffer, 0);
+	m_pRenderer->GetDeviceContext()->Unmap(m_pVSConstantBuffer_Anim, 0);
+}
+
+void RenderModel::__UpdateVSConstants_Joints()
+{
+	HRESULT hr = S_OK;
+
+	// Lock the constant buffer so it can be written to.
+	D3D11_MAPPED_SUBRESOURCE mappedResource;
+	hr = m_pRenderer->GetDeviceContext()->Map(m_pVSConstantBuffer_Joints, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+	assert(hr == S_OK);
+
+	// Get a pointer to the data in the constant buffer.
+	RenderShaders_Model_VSConstantants_Joints* dataPtr = reinterpret_cast<RenderShaders_Model_VSConstantants_Joints*>(mappedResource.pData);
+
+	// update computed matricies for dirty joints and their children.
+	for (u32 i = 0; i < m_cJoints; ++i)
+	{
+		// if there is a parent, start with that.
+		RenderModel_Joint& src = m_joints[i];
+		const bool isNeedsRecompute = src.m_isDirty || ((src.m_parentIndex >= 0) && m_joints[src.m_parentIndex].m_isDirty);
+		if (!isNeedsRecompute)
+			continue;
+
+		const Matrix4 matrixJoint = Matrix4::MultiplyAB(src.m_baseMatrix, src.m_rotateMatrix);
+
+		if (src.m_parentIndex >= 0)
+		{
+			const Matrix4& matrixParent = m_joints[src.m_parentIndex].m_computedMatrix;
+			src.m_computedMatrix = Matrix4::MultiplyAB(matrixParent, matrixJoint);
+		}
+		else
+		{
+			src.m_computedMatrix = Matrix4::MultiplyAB(m_baseJointMatrix, matrixJoint);
+		}
+
+		src.m_isDirty = true;
+	}
+
+	// apply matricies to constants.
+	for (u32 i = 0; i < m_cJoints; ++i)
+	{
+		RenderModel_Joint& src = m_joints[i];
+
+		Matrix4 matrixBound = Matrix4::MultiplyAB(src.m_computedMatrix, src.m_baseInvBindMatrix);
+
+		// compute matrix to apply to verticies.
+		{
+			DirectX::XMMATRIX worldMatrix1;
+			Matrix4ToXMMATRIX(matrixBound, worldMatrix1);
+			DirectX::XMMATRIX worldMatrix2 = DirectX::XMMatrixTranspose(worldMatrix1);
+			DirectX::XMStoreFloat4x4(&(dataPtr->jointMatrix[i]), worldMatrix2);
+		}
+
+		// compute matrix to apply to vertex normals.
+		{
+			const Matrix4 matrixNormal1 = Matrix4::ExtractRotation(matrixBound);
+			DirectX::XMMATRIX matrixNormal2;
+			Matrix4ToXMMATRIX(matrixNormal1, matrixNormal2);
+			DirectX::XMMATRIX matrixNormal3 = DirectX::XMMatrixInverse(nullptr, matrixNormal2);
+			DirectX::XMMATRIX matrixNormal4 = DirectX::XMMatrixTranspose(matrixNormal3);
+			DirectX::XMStoreFloat4x4(&(dataPtr->jointNormalMatrix[i]), matrixNormal4);
+		}
+
+		src.m_isDirty = false;
+	}
+
+	// Unlock the constant buffer.
+	m_pRenderer->GetDeviceContext()->Unmap(m_pVSConstantBuffer_Joints, 0);
+
+	// no longer dirty.
+	m_isJointsDirty = false;
 }
 
 void RenderModel::__Initialize(RenderMain* pRenderer, s32 vertexCount, RenderModel_VertexPositionTexture* verticiesIn, s32 indexCount, u16* indicies, const Vector4& color)

@@ -28,11 +28,21 @@ struct RenderShader_Vertex_Generic
 	DirectX::XMFLOAT4 weights;
 };
 
-struct RenderShaders_Model_VSConstantants
+struct RenderShaders_Model_VSConstantants_World
 {
 	DirectX::XMFLOAT4X4 world;
 	DirectX::XMFLOAT4X4 worldNormalMatrix;
+};
+
+struct RenderShaders_Model_VSConstantants_Anim
+{
 	int32_t animIndex;
+};
+
+struct RenderShaders_Model_VSConstantants_Joints
+{
+	DirectX::XMFLOAT4X4 jointMatrix[16];
+	DirectX::XMFLOAT4X4 jointNormalMatrix[16];
 };
 
 class RenderShader : public TB8::ref_count
@@ -51,7 +61,9 @@ public:
 
 	void SetTexture(RenderTexture* pTextures);
 	void SetBoneTexture(ID3D11ShaderResourceView* pBoneTexture);
-	void SetModelVSConstants(ID3D11Buffer* pVSConstants);
+	void SetModelVSConstants_World(ID3D11Buffer* pVSConstants);
+	void SetModelVSConstants_Anim(ID3D11Buffer* pVSConstants);
+	void SetModelVSConstants_Joints(ID3D11Buffer* pVSConstants);
 
 	void ApplyRenderState(ID3D11DeviceContext* context);
 
@@ -73,8 +85,10 @@ private:
 	ID3D11VertexShader*						m_pVertexShader;
 	ID3D11InputLayout*						m_pInputLayout;
 	ID3D11PixelShader*						m_pPixelShader;
-	ID3D11Buffer*							m_pVSConstantBuffer;
-	ID3D11Buffer*							m_pVSConstantBufferModel;
+	ID3D11Buffer*							m_pVSConstantBuffer_View;	// world (view, projection)
+	ID3D11Buffer*							m_pVSConstantBuffer_World;	// model (model -> world, normal)
+	ID3D11Buffer*							m_pVSConstantBuffer_Anim;	// model (anim index)
+	ID3D11Buffer*							m_pVSConstantBuffer_Joints;	// model (joints)
 	ID3D11Buffer*							m_pPSConstantBuffer;
 	ID3D11SamplerState*						m_pSampleState;
 	RenderTexture*							m_pTexture;

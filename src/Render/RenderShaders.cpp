@@ -13,7 +13,7 @@
 namespace TB8
 {
 
-struct RenderShaders_VSConstantBufferData 
+struct RenderShaders_VSConstantBufferData_View 
 {
 	DirectX::XMFLOAT4X4 view;
 	DirectX::XMFLOAT4X4 projection;
@@ -31,9 +31,11 @@ RenderShader::RenderShader(RenderMain* pRenderer, RenderShaderID id)
 	, m_pVertexShader(nullptr)
 	, m_pInputLayout(nullptr)
 	, m_pPixelShader(nullptr)
-	, m_pVSConstantBuffer(nullptr)
+	, m_pVSConstantBuffer_View(nullptr)
+	, m_pVSConstantBuffer_World(nullptr)
+	, m_pVSConstantBuffer_Anim(nullptr)
+	, m_pVSConstantBuffer_Joints(nullptr)
 	, m_pPSConstantBuffer(nullptr)
-	, m_pVSConstantBufferModel(nullptr)
 	, m_pSampleState(nullptr)
 	, m_pTexture(nullptr)
 	, m_pBoneTexture(nullptr)
@@ -123,7 +125,7 @@ void RenderShader::ApplyRenderState(ID3D11DeviceContext* context)
 
 	// vs constants.
 	{
-		ID3D11Buffer* ppBuffers[2] = { m_pVSConstantBuffer, m_pVSConstantBufferModel };
+		ID3D11Buffer* ppBuffers[4] = { m_pVSConstantBuffer_View, m_pVSConstantBuffer_World, m_pVSConstantBuffer_Anim, m_pVSConstantBuffer_Joints };
 
 		context->VSSetConstantBuffers(
 			0,
@@ -177,11 +179,25 @@ void RenderShader::SetBoneTexture(ID3D11ShaderResourceView* pBoneTexture)
 	m_pBoneTexture->AddRef();
 }
 
-void RenderShader::SetModelVSConstants(ID3D11Buffer* pVSConstants)
+void RenderShader::SetModelVSConstants_World(ID3D11Buffer* pVSConstants)
 {
-	RELEASEI(m_pVSConstantBufferModel);
-	m_pVSConstantBufferModel = pVSConstants;
-	m_pVSConstantBufferModel->AddRef();
+	RELEASEI(m_pVSConstantBuffer_World);
+	m_pVSConstantBuffer_World = pVSConstants;
+	m_pVSConstantBuffer_World->AddRef();
+}
+
+void RenderShader::SetModelVSConstants_Anim(ID3D11Buffer* pVSConstants)
+{
+	RELEASEI(m_pVSConstantBuffer_Anim);
+	m_pVSConstantBuffer_Anim = pVSConstants;
+	m_pVSConstantBuffer_Anim->AddRef();
+}
+
+void RenderShader::SetModelVSConstants_Joints(ID3D11Buffer* pVSConstants)
+{
+	RELEASEI(m_pVSConstantBuffer_Joints);
+	m_pVSConstantBuffer_Joints = pVSConstants;
+	m_pVSConstantBuffer_Joints->AddRef();
 }
 
 void RenderShader::__Initialize(const char* path, const char* vertexFileName, const char* pixelFileName)
@@ -257,17 +273,17 @@ void RenderShader::__Initialize(const char* path, const char* vertexFileName, co
 		D3D11_BUFFER_DESC constantBufferDesc;
 		ZeroMemory(&constantBufferDesc, sizeof(constantBufferDesc));
 		constantBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
-		constantBufferDesc.ByteWidth = ((sizeof(RenderShaders_VSConstantBufferData) + 15) / 16) * 16;
+		constantBufferDesc.ByteWidth = ((sizeof(RenderShaders_VSConstantBufferData_View) + 15) / 16) * 16;
 		constantBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 		constantBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 		constantBufferDesc.MiscFlags = 0;
 		constantBufferDesc.StructureByteStride = 0;
 
-		assert(m_pVSConstantBuffer == nullptr);
+		assert(m_pVSConstantBuffer_View == nullptr);
 		hr = device->CreateBuffer(
 			&constantBufferDesc,
 			nullptr,
-			&m_pVSConstantBuffer
+			&m_pVSConstantBuffer_View
 		);
 		assert(hr == S_OK);
 	}
@@ -321,11 +337,11 @@ void RenderShader::__UpdateVSConstants()
 
 	// Lock the constant buffer so it can be written to.
 	D3D11_MAPPED_SUBRESOURCE mappedResource;
-	hr = pContext->Map(m_pVSConstantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+	hr = pContext->Map(m_pVSConstantBuffer_View, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
 	assert(hr == S_OK);
 
 	// Get a pointer to the data in the constant buffer.
-	RenderShaders_VSConstantBufferData* dataPtr = reinterpret_cast<RenderShaders_VSConstantBufferData*>(mappedResource.pData);
+	RenderShaders_VSConstantBufferData_View* dataPtr = reinterpret_cast<RenderShaders_VSConstantBufferData_View*>(mappedResource.pData);
 
 	// world -> view
 	DirectX::XMMATRIX viewMatrix = DirectX::XMMatrixTranspose(m_viewTransform);
@@ -336,7 +352,7 @@ void RenderShader::__UpdateVSConstants()
 	DirectX::XMStoreFloat4x4(&(dataPtr->projection), projectionMatrix);
 
 	// Unlock the constant buffer.
-	pContext->Unmap(m_pVSConstantBuffer, 0);
+	pContext->Unmap(m_pVSConstantBuffer_View, 0);
 }
 
 void RenderShader::__UpdatePSConstants()
@@ -366,9 +382,11 @@ void RenderShader::__Shutdown()
 	RELEASEI(m_pVertexShader);
 	RELEASEI(m_pInputLayout);
 	RELEASEI(m_pPixelShader);
-	RELEASEI(m_pVSConstantBufferModel);
 	RELEASEI(m_pPSConstantBuffer);
-	RELEASEI(m_pVSConstantBuffer);
+	RELEASEI(m_pVSConstantBuffer_Joints);
+	RELEASEI(m_pVSConstantBuffer_Anim);
+	RELEASEI(m_pVSConstantBuffer_World);
+	RELEASEI(m_pVSConstantBuffer_View);
 	RELEASEI(m_pSampleState);
 }
 
