@@ -393,29 +393,31 @@ void RenderModel::__InitializeFromDAE(RenderMain* pRenderer, const char* path, c
 		RenderModel_DAE_Mesh& mesh = userCtx.m_meshes.front();
 		m_cJoints = static_cast<u32>(mesh.m_skinJoints.size());
 		assert(m_cJoints <= ARRAYSIZE(m_joints));
-
-		m_baseJointMatrix = userCtx.m_baseJointMatrix;
-		m_bindShapeMatrix = mesh.m_bindShapeMatrix;
-
-		Matrix4 x1 = Matrix4::MultiplyAB(mesh.m_skinJoints[0].m_jointMatrix, mesh.m_skinJoints[0].m_invBindMatrix);
-		Matrix4 x2 = Matrix4::MultiplyAB(m_baseJointMatrix, mesh.m_bindShapeMatrix);
-
-		for (std::vector<RenderModel_DAE_SkinJoint>::iterator itJoint = mesh.m_skinJoints.begin(); itJoint != mesh.m_skinJoints.end(); ++itJoint)
+		if (m_cJoints > 0)
 		{
-			const RenderModel_DAE_SkinJoint& src = *itJoint;
-			assert(src.m_index < ARRAYSIZE(m_joints));
-			assert(src.m_parent < src.m_index);
-			RenderModel_Joint& dst = m_joints[src.m_index];
+			m_baseJointMatrix = userCtx.m_baseJointMatrix;
+			m_bindShapeMatrix = mesh.m_bindShapeMatrix;
 
-			dst.m_index = src.m_index;
-			dst.m_parentIndex = src.m_parent;
+			Matrix4 x1 = Matrix4::MultiplyAB(mesh.m_skinJoints[0].m_jointMatrix, mesh.m_skinJoints[0].m_invBindMatrix);
+			Matrix4 x2 = Matrix4::MultiplyAB(m_baseJointMatrix, mesh.m_bindShapeMatrix);
 
-			dst.m_baseMatrix = src.m_jointMatrix;
-			dst.m_baseInvBindMatrix = src.m_invBindMatrix;
+			for (std::vector<RenderModel_DAE_SkinJoint>::iterator itJoint = mesh.m_skinJoints.begin(); itJoint != mesh.m_skinJoints.end(); ++itJoint)
+			{
+				const RenderModel_DAE_SkinJoint& src = *itJoint;
+				assert(src.m_index < ARRAYSIZE(m_joints));
+				assert(src.m_parent < src.m_index);
+				RenderModel_Joint& dst = m_joints[src.m_index];
 
-			dst.m_isDirty = true;
-			dst.m_rotateMatrix.SetIdentity();
-			dst.m_computedMatrix.SetIdentity();
+				dst.m_index = src.m_index;
+				dst.m_parentIndex = src.m_parent;
+
+				dst.m_baseMatrix = src.m_jointMatrix;
+				dst.m_baseInvBindMatrix = src.m_invBindMatrix;
+
+				dst.m_isDirty = true;
+				dst.m_rotateMatrix.SetIdentity();
+				dst.m_computedMatrix.SetIdentity();
+			}
 		}
 	}
 

@@ -76,11 +76,13 @@ public:
 	~RenderModel();
 
 	static RenderModel* Alloc(RenderMain* pRenderer, s32 vertexCount, RenderModel_VertexPositionTexture* verticies, s32 indexCount, u16* indicies, const Vector4& color);
+	static RenderModel* AllocSquareFromTexture(RenderMain* pRenderer, const Vector2& modelSize, const char* pszPath);
 	static RenderModel* AllocFromDAE(RenderMain* pRenderer, const char* path, const char* file, const char* modelName);
 
 	void SetPosition(const Vector3& position);
 	void SetRotation(const Vector3& rotation);
 	void SetScale(const Vector3& scale);
+	void SetWorldTransform(const Matrix4& transform);
 	const Matrix4& GetWorldTransform() const { return m_worldTransform; }
 
 	const std::vector<RenderModel_Anims>& GetAnims() const { return m_anims; }
@@ -96,6 +98,7 @@ public:
 
 private:
 	void __Initialize(RenderMain* pRenderer, s32 vertexCount, RenderModel_VertexPositionTexture* verticies, s32 indexCount, u16* indicies, const Vector4& color);
+	void __InitializeSquareFromTexture(RenderMain* pRenderer, const Vector2& modelSize, const char* pszPath);
 	void __InitializeFromDAE(RenderMain* pRenderer, const char* path, const char* file, const char* modelName);
 
 	virtual void __Free() override;

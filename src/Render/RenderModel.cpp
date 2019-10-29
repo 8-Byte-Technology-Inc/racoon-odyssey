@@ -57,6 +57,13 @@ RenderModel::~RenderModel()
 	return obj;
 }
 
+/* static */ RenderModel* RenderModel::AllocSquareFromTexture(RenderMain* pRenderer, const Vector2& modelSize, const char* pszPath)
+{
+	RenderModel* obj = TB8_NEW(RenderModel)(pRenderer);
+	obj->__InitializeSquareFromTexture(pRenderer, modelSize, pszPath);
+	return obj;
+}
+
 /* static */ RenderModel* RenderModel::AllocFromDAE(RenderMain* pRenderer, const char* path, const char* file, const char* modelName)
 {
 	RenderModel* obj = TB8_NEW(RenderModel)(pRenderer);
@@ -132,6 +139,18 @@ void RenderModel::SetPosition(const Vector3& position)
 		return;
 
 	m_position = position;
+
+	Matrix4 userScale;
+	Matrix4 userRotation;
+	Matrix4 userPosition;
+
+	userScale.SetScale(m_scale);
+	userRotation.SetRotate(m_rotation);
+	userPosition.SetTranslation(m_position);
+
+	m_worldTransform = Matrix4::MultiplyAB(userScale, userRotation);
+	m_worldTransform = Matrix4::MultiplyAB(userPosition, m_worldTransform);
+
 	__UpdateVSConstants_World();
 }
 
@@ -141,6 +160,18 @@ void RenderModel::SetRotation(const Vector3& rotation)
 		return;
 
 	m_rotation = rotation;
+
+	Matrix4 userScale;
+	Matrix4 userRotation;
+	Matrix4 userPosition;
+
+	userScale.SetScale(m_scale);
+	userRotation.SetRotate(m_rotation);
+	userPosition.SetTranslation(m_position);
+
+	m_worldTransform = Matrix4::MultiplyAB(userScale, userRotation);
+	m_worldTransform = Matrix4::MultiplyAB(userPosition, m_worldTransform);
+
 	__UpdateVSConstants_World();
 }
 
@@ -150,6 +181,27 @@ void RenderModel::SetScale(const Vector3& scale)
 		return;
 
 	m_scale = scale;
+
+	Matrix4 userScale;
+	Matrix4 userRotation;
+	Matrix4 userPosition;
+
+	userScale.SetScale(m_scale);
+	userRotation.SetRotate(m_rotation);
+	userPosition.SetTranslation(m_position);
+
+	m_worldTransform = Matrix4::MultiplyAB(userScale, userRotation);
+	m_worldTransform = Matrix4::MultiplyAB(userPosition, m_worldTransform);
+
+	__UpdateVSConstants_World();
+}
+
+void RenderModel::SetWorldTransform(const Matrix4& transform)
+{
+	if (m_worldTransform == transform)
+		return;
+
+	m_worldTransform = transform;
 	__UpdateVSConstants_World();
 }
 
@@ -267,17 +319,6 @@ void RenderModel::__InitVSConstantBuffers()
 void RenderModel::__UpdateVSConstants_World()
 {
 	HRESULT hr = S_OK;
-
-	Matrix4 userScale;
-	Matrix4 userRotation;
-	Matrix4 userPosition;
-
-	userScale.SetScale(m_scale);
-	userRotation.SetRotate(m_rotation);
-	userPosition.SetTranslation(m_position);
-
-	m_worldTransform = Matrix4::MultiplyAB(userScale, userRotation);
-	m_worldTransform = Matrix4::MultiplyAB(userPosition, m_worldTransform);
 
 	// Lock the constant buffer so it can be written to.
 	D3D11_MAPPED_SUBRESOURCE mappedResource;
@@ -409,6 +450,128 @@ void RenderModel::__Initialize(RenderMain* pRenderer, s32 vertexCount, RenderMod
 	ID3D11Device* device = pRenderer->GetDevice();
 
 	assert(!"not yet implemented !");
+}
+
+void RenderModel::__InitializeSquareFromTexture(RenderMain* pRenderer, const Vector2& modelSize, const char* pszPath)
+{
+	HRESULT hr = S_OK;
+
+	// get a reference to the shader.
+	m_pShader = pRenderer->GetShaderByID(RenderShaderID_Generic);
+	m_pShader->AddRef();
+
+	// load texture.
+	m_pTexture = RenderTexture::Alloc(pRenderer, pszPath);
+
+	// construct verticies & indicies.
+	std::vector<RenderShader_Vertex_Generic> verticies;
+	std::vector<u16> indicies;
+	verticies.reserve(4);
+	indicies.reserve(6);
+
+	// v0
+	RenderShader_Vertex_Generic vertex;
+	Vector2 targetTexPos;
+	m_pTexture->MapUV(0, Vector2(0.f, 0.f), &targetTexPos);
+	vertex.position.x = 0.f;
+	vertex.position.y = 0.f;
+	vertex.position.z = 0.f;
+	vertex.normal.x = 0.f;
+	vertex.normal.y = 0.f;
+	vertex.normal.z = 1.f;
+	vertex.color.x = targetTexPos.x;
+	vertex.color.y = targetTexPos.y;
+	vertex.color.z = 0.f;
+	vertex.color.w = 0.f;
+	vertex.bones.x = -1;
+	verticies.push_back(vertex);
+
+	// v1
+	m_pTexture->MapUV(0, Vector2(1.f, 0.f), &targetTexPos);
+	vertex.position.x = modelSize.x;
+	vertex.color.x = targetTexPos.x;
+	vertex.color.y = targetTexPos.y;
+	verticies.push_back(vertex);
+
+	// v2
+	m_pTexture->MapUV(0, Vector2(1.f, 1.f), &targetTexPos);
+	vertex.position.y = modelSize.y;
+	vertex.color.x = targetTexPos.x;
+	vertex.color.y = targetTexPos.y;
+	verticies.push_back(vertex);
+
+	// v3
+	m_pTexture->MapUV(0, Vector2(0.f, 1.f), &targetTexPos);
+	vertex.position.x = 0.f;
+	vertex.color.x = targetTexPos.x;
+	vertex.color.y = targetTexPos.y;
+	verticies.push_back(vertex);
+
+	indicies.push_back(0);
+	indicies.push_back(1);
+	indicies.push_back(2);
+
+	indicies.push_back(0);
+	indicies.push_back(2);
+	indicies.push_back(3);
+
+	// build verticies.
+	m_vertexCount = static_cast<s32>(verticies.size());
+
+	// construct the vertex buffer.
+	D3D11_BUFFER_DESC vertexBufferDesc;
+	ZeroMemory(&vertexBufferDesc, sizeof(vertexBufferDesc));
+	vertexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+	vertexBufferDesc.ByteWidth = sizeof(RenderShader_Vertex_Generic) * m_vertexCount;
+	vertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+	vertexBufferDesc.CPUAccessFlags = 0;
+	vertexBufferDesc.MiscFlags = 0;
+	vertexBufferDesc.StructureByteStride = sizeof(RenderShader_Vertex_Generic);
+
+	D3D11_SUBRESOURCE_DATA vertexData;
+	ZeroMemory(&vertexData, sizeof(D3D11_SUBRESOURCE_DATA));
+	vertexData.pSysMem = verticies.data();
+	vertexData.SysMemPitch = 0;
+	vertexData.SysMemSlicePitch = 0;
+
+	assert(m_pVertexBuffer == nullptr);
+	hr = pRenderer->GetDevice()->CreateBuffer(
+		&vertexBufferDesc,
+		&vertexData,
+		&m_pVertexBuffer
+	);
+	assert(hr == S_OK);
+
+	// build indicies
+	assert(indicies.size() < 0x10000);
+	m_indexCount = static_cast<s32>(indicies.size());
+
+	// construct the index buffer.
+	D3D11_BUFFER_DESC indexBufferDesc;
+	ZeroMemory(&indexBufferDesc, sizeof(indexBufferDesc));
+	indexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+	indexBufferDesc.ByteWidth = sizeof(u16) * m_indexCount;
+	indexBufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+	indexBufferDesc.CPUAccessFlags = 0;
+	indexBufferDesc.MiscFlags = 0;
+	indexBufferDesc.StructureByteStride = sizeof(u16);
+
+	D3D11_SUBRESOURCE_DATA indexData;
+	ZeroMemory(&indexData, sizeof(D3D11_SUBRESOURCE_DATA));
+	indexData.pSysMem = indicies.data();
+	indexData.SysMemPitch = 0;
+	indexData.SysMemSlicePitch = 0;
+
+	assert(m_pIndexBuffer == nullptr);
+	hr = pRenderer->GetDevice()->CreateBuffer(
+		&indexBufferDesc,
+		&indexData,
+		&m_pIndexBuffer
+	);
+	assert(hr == S_OK);
+
+	// init constant buffer.
+	__InitVSConstantBuffers();
 }
 
 void RenderModel::__Free()
