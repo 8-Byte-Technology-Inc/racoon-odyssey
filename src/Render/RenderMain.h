@@ -18,7 +18,8 @@ struct RenderMain_MutableData
 
 	s32						m_dpi;
 	RenderScaleSize			m_scaleSize;
-	IVector2				m_screenSize;
+	IVector2				m_screenSizePixels;
+	Vector2					m_screenSizeWorld;
 	IVector2				m_mousePos;
 
 	RenderMain_MutableData();
@@ -64,7 +65,8 @@ public:
 	const IVector2& GetRenderMousePos() const { return m_dataRender.m_mousePos; }
 	void SetRenderMousePos(const IVector2& pos);
 	RenderScaleSize GetRenderScaleSize() const { return m_dataRender.m_scaleSize; }
-	const IVector2& GetRenderScreenSize() const { return m_dataRender.m_screenSize; }
+	const IVector2& GetRenderScreenSize() const { return m_dataRender.m_screenSizePixels; }
+	const Vector2& GetRenderScreenSizeWorld() const { return m_dataRender.m_screenSizeWorld; }
 
 	void DrawCursor();
 	bool IsCursorVisible() const;
@@ -78,6 +80,7 @@ private:
 	void __ConfigureBuffers_D2D();
 	void __ReleaseBuffers();
 	void __ResizeBuffers();
+	void __SetScreenSizePixels(const IVector2& size, s32 dpi);
 
 	void __EventHandler(EventMessage* message);
 	void __EventResizeWindow(class EventMessage_ResizeWindow* event);

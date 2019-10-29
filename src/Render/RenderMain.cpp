@@ -255,10 +255,7 @@ void RenderMain::__Initialize()
 
 	RECT rc;
 	GetClientRect(m_hWnd, &rc);
-	m_dataRender.m_screenSize.x = rc.right - rc.left;
-	m_dataRender.m_screenSize.y = rc.bottom - rc.top;
-	m_dataRender.m_dpi = GetDpiForWindow(m_hWnd);
-	m_dataRender.m_scaleSize = GetRenderScaleFromDPI(m_dataRender.m_dpi);
+	__SetScreenSizePixels(IVector2(rc.right - rc.left, rc.bottom - rc.top), GetDpiForWindow(m_hWnd));
 
 	// Identify the physical adapter (GPU or card) this device is runs on.
 	IDXGIAdapter* dxgiAdapter = nullptr;
@@ -275,8 +272,8 @@ void RenderMain::__Initialize()
 
 	// Allocate a descriptor.
 	DXGI_SWAP_CHAIN_DESC1 swapChainDesc = { 0 };
-	swapChainDesc.Width = m_dataRender.m_screenSize.x;
-	swapChainDesc.Height = m_dataRender.m_screenSize.y;
+	swapChainDesc.Width = m_dataRender.m_screenSizePixels.x;
+	swapChainDesc.Height = m_dataRender.m_screenSizePixels.y;
 	swapChainDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;				// this is the most common swapchain format
 	swapChainDesc.Stereo = false;
 	swapChainDesc.SampleDesc.Count = 1;								// don't use multi-sampling
@@ -317,6 +314,19 @@ void RenderMain::__Initialize()
 	// create shaders.
 	m_shaders.resize(1);
 	m_shaders[0] = RenderShader::Alloc(this, RenderShaderID_Generic, __GetPathBinary().c_str(), "GenericVertexShader.cso", "GenericPixelShader.cso");
+}
+
+void RenderMain::__SetScreenSizePixels(const IVector2& screenSizePixels, s32 dpi)
+{
+	m_dataRender.m_dpi = dpi;
+
+	m_dataRender.m_scaleSize = GetRenderScaleFromDPI(dpi);
+
+	m_dataRender.m_screenSizePixels = screenSizePixels;
+
+	// world coordinates in meters, 1 meter = 2 screen inches.
+	m_dataRender.m_screenSizeWorld.x = static_cast<f32>(screenSizePixels.x) / (2.f * static_cast<f32>(dpi));
+	m_dataRender.m_screenSizeWorld.y = static_cast<f32>(screenSizePixels.y) / (2.f * static_cast<f32>(dpi));
 }
 
 void RenderMain::__ConfigureBuffers()
@@ -523,8 +533,8 @@ void RenderMain::__ResizeBuffers()
 
 	hr = m_pDXGISwapChain->ResizeBuffers(
 		2,								// UINT        BufferCount,
-		m_dataRender.m_screenSize.x,	// UINT        Width,
-		m_dataRender.m_screenSize.y,	// UINT        Height,
+		m_dataRender.m_screenSizePixels.x,	// UINT        Width,
+		m_dataRender.m_screenSizePixels.y,	// UINT        Height,
 		DXGI_FORMAT_UNKNOWN,			// DXGI_FORMAT NewFormat,
 		0								// UINT        SwapChainFlags
 	);
@@ -534,7 +544,7 @@ void RenderMain::__ResizeBuffers()
 	__ConfigureBuffers();
 
 	// let everyone know we resized the buffers.
-	EventMessage* event = EventMessage_RenderAreaResize::Alloc(m_dataRender.m_dpi, m_dataRender.m_scaleSize, m_dataRender.m_screenSize);
+	EventMessage* event = EventMessage_RenderAreaResize::Alloc(m_dataRender.m_dpi, m_dataRender.m_scaleSize, m_dataRender.m_screenSizePixels);
 	__QueueEvent(&event);
 }
 
@@ -605,13 +615,11 @@ void RenderMain::__EventResizeWindow(EventMessage_ResizeWindow* event)
 	const IVector2 screenSize(event->m_sizeX, event->m_sizeY);
 	const s32 dpi = GetDpiForWindow(m_hWnd);
 
-	if ((m_dataRender.m_screenSize == screenSize) && (m_dataRender.m_dpi == dpi))
+	if ((m_dataRender.m_screenSizePixels == screenSize) && (m_dataRender.m_dpi == dpi))
 		return;
 
 	// update the screen size.
-	m_dataRender.m_screenSize = screenSize;
-	m_dataRender.m_dpi = dpi;
-	m_dataRender.m_scaleSize = GetRenderScaleFromDPI(m_dataRender.m_dpi);
+	__SetScreenSizePixels(screenSize, dpi);
 	m_dataRender.m_isChanged = true;
 
 	__ResizeBuffers();
