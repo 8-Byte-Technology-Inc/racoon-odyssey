@@ -1,0 +1,27 @@
+<map>
+	<model id="1" type="texture" path="grass.png"/>
+	<model id="2" type="dae" path="stone_wall.dae" model="Wall"/>
+	
+	<size x="128" y="128" default_tile="1"/>
+	<start x="64" y="64"/>
+	
+	<cell pos="62,62" wall="top,2" wall="left,2"/>
+	<cell pos="63,62" wall="top,2"/>
+	<cell pos="64,62" wall="top,2"/>
+	<cell pos="65,62" wall="top,2" wall="right,2"/>
+
+	<cell pos="62,63" wall="left,2"/>
+	<cell pos="63,63"/>
+	<cell pos="64,63"/>
+	<cell pos="65,63" wall="right,2"/>
+
+	<cell pos="62,64" wall="left,2"/>
+	<cell pos="63,64"/>
+	<cell pos="64,64"/>
+	<cell pos="65,64" wall="right,2"/>
+
+	<cell pos="62,65" wall="bottom,2" wall="left,2"/>
+	<cell pos="63,65" wall="bottom,2"/>
+	<cell pos="64,65" wall="bottom,2"/>
+	<cell pos="65,65" wall="bottom,2" wall="right,2"/>
+</map>
