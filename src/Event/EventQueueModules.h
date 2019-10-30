@@ -9,6 +9,7 @@ enum EventModuleID : u32
 {
 	EventModuleID_Default = 1,
 	EventModuleID_Renderer,
+	EventModuleID_World,
 };
 
 }

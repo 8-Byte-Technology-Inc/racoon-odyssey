@@ -5,7 +5,7 @@
 namespace TB8
 {
 	class RenderMain;
-	class RenderModel;
+	class World;
 	class EventQueue;
 }
 
@@ -29,7 +29,6 @@ private:
 	HRESULT __CreateDesktopWindow();
 
 	void __ProcessRenderFrame();
-	void __UpdateModelPosition();
 	void __SetRenderCamera();
 	void __ProcessRenderFrame(s32 frameCount);
 	void __DispatchEventQueue();
@@ -68,9 +67,9 @@ private:
 
 	Client_Globals*		m_pClientGlobals;
 
-	TB8::RenderMain*	m_pRenderer;
+	TB8::World*			m_pWorld;
 
-	TB8::RenderModel*	m_pModel;
+	TB8::RenderMain*	m_pRenderer;
 
 	TB8::EventQueue*	m_eventQueue;
 };

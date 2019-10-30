@@ -58,6 +58,10 @@ struct guid : u128
 	explicit operator bool() const { return IsValid(); }
 } ;
 
+inline bool is_approx_zero(f32 v) { return (-0.000001 < v) && (v < 0.00001); }
+inline bool is_negative(f32 v) { return (v < 0.f); }
+inline f32 get_sign(f32 v) { return (v < 0.f) ? -1.f : 1.f; }
+
 struct Vector3
 {
 	Vector3()
@@ -73,11 +77,18 @@ struct Vector3
 	{
 	}
 	bool operator ==(const Vector3& rhs) const { return x == rhs.x && y == rhs.y && z == rhs.z; }
+	f32 Mag() const { return static_cast<f32>(sqrt(x * x + y * y + z * z)); }
+	static f32 Dot(const Vector3& a, const Vector3& b) { return (a.x * b.x) + (a.y * b.y) + (a.z * b.z); }
 
 	float x;
 	float y;
 	float z;
 };
+
+Vector3 operator +(const Vector3& a, const Vector3& b);
+Vector3 operator -(const Vector3& a, const Vector3& b);
+Vector3 operator *(const Vector3& a, f32 b);
+Vector3 operator /(const Vector3& a, f32 b);
 
 struct Vector2
 {
@@ -93,6 +104,8 @@ struct Vector2
 	}
 	f32 x;
 	f32 y;
+
+	void Normalize();
 } ;
 
 struct Vector4

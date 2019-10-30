@@ -12,9 +12,12 @@
 
 #include "render/RenderMain.h"
 #include "render/RenderModel.h"
+#include "render/RenderHelper.h"
 
 #include "event/EventQueue.h"
 #include "event/EventQueueMessages.h"
+
+#include "world/World.h"
 
 #include "Client_Globals.h"
 #include "MainClass.h"
@@ -25,6 +28,7 @@ const WCHAR* s_windowClassName = L"Racoon-Odyssey-Class";
 MainClass::MainClass()
 	: m_eventQueue(nullptr)
 	, m_pClientGlobals(nullptr)
+	, m_pWorld(nullptr)
 	, m_pRenderer(nullptr)
 	, m_hInstance(NULL)
 	, m_hWnd(NULL)
@@ -142,11 +146,13 @@ void MainClass::Initialize()
 	// create renderer
 	m_pRenderer = TB8::RenderMain::Alloc(m_hWnd, m_pClientGlobals);
 
-	// load a model.
-	m_pModel = TB8::RenderModel::AllocFromDAE(m_pRenderer, m_pClientGlobals->GetPathAssets().c_str(), "mooey/mooey.dae", "Mooey");
-
 	// initialize globals.
 	m_pClientGlobals->Initialize(m_pRenderer);
+
+	// create world.
+	m_pWorld = TB8::World::Alloc(m_pClientGlobals);
+	m_pWorld->LoadMap("maps/wall-maze/wall-maze.xml");
+	m_pWorld->LoadCharacter("mooey/mooey.dae", "Mooey");
 }
 
 void MainClass::Run()
@@ -201,14 +207,14 @@ void MainClass::__ProcessRenderFrame(s32 frameCount)
 	m_pClientGlobals->UpdateFrameCount(frameCount);
 
 	__ProcessInternal();
-	__UpdateModelPosition();
 	__SetRenderCamera();
 
 	m_pRenderer->UpdateRender(frameCount);
+	m_pWorld->Update(frameCount);
 
 	m_pRenderer->BeginUpdate();
 
-	m_pModel->Render(m_pRenderer);
+	m_pWorld->Render(m_pRenderer);
 
 	m_pRenderer->BeginDraw();
 
@@ -219,6 +225,7 @@ void MainClass::__ProcessRenderFrame(s32 frameCount)
 	m_pRenderer->EndUpdate();
 }
 
+#if 0
 void MainClass::__UpdateModelPosition()
 {
 	const std::vector<TB8::RenderModel_Mesh>& meshes = m_pModel->GetMeshes();
@@ -250,24 +257,40 @@ void MainClass::__UpdateModelPosition()
 	// right leg
 	m_pModel->SetJointRotation(4, Vector3(DirectX::XM_PI * static_cast<f32>(rotation_legR) / 180.f, 0.f, 0.f));
 }
+#endif
 
 void MainClass::__SetRenderCamera()
 {
 	// view transform; camera position around model.
 	Matrix4 viewMatrix;
 	{
-		Matrix4 viewScaleZ;
-		viewScaleZ.SetScale(Vector3(1.f, 1.f, 1.f / sin(DirectX::XM_PI / 4.f)));
+		const Vector3& characterPos = m_pWorld->GetCharacterPosition(); // meters.
 
-		Matrix4 viewRotateX;
-		viewRotateX.SetRotateX(-DirectX::XM_PI / 8.f);
+		// align character position to screen pixels.
+		const f32 pixelsPerMeter = m_pRenderer->GetRenderDPI() * 2.f;
+
+		Vector3 vectorAlign;
+		vectorAlign.x = 1.0f / pixelsPerMeter;
+		vectorAlign.y = (1.0f / pixelsPerMeter) / sin(DirectX::XM_PI / 8.f);
+
+		Vector3 characterPosAligned;
+		characterPosAligned.x = static_cast<f32>(static_cast<s64>(characterPos.x / vectorAlign.x)) * vectorAlign.x;
+		characterPosAligned.y = static_cast<f32>(static_cast<s64>(characterPos.y / vectorAlign.y)) * vectorAlign.y;
+		characterPosAligned.z = characterPos.z;
 
 		Matrix4 viewPosition;
-		viewPosition.SetTranslation(Vector3(0.f, 0.f, +3072.f));
+		viewPosition.SetTranslation(Vector3(0.f - characterPosAligned.x, 0.f - characterPosAligned.y, 0.f));
 
-		viewMatrix = viewScaleZ;
-		viewMatrix = Matrix4::MultiplyAB(viewRotateX, viewMatrix);
-		viewMatrix = Matrix4::MultiplyAB(viewPosition, viewMatrix);
+		Matrix4 matrixRotateX;
+		matrixRotateX.SetRotateX(-DirectX::XM_PI / 8.f);
+
+		Matrix4 matrixRotateZ;
+		matrixRotateZ.SetRotateZ(DirectX::XM_PI / 8.f);
+
+		viewMatrix = matrixRotateZ;
+		viewMatrix = Matrix4::MultiplyAB(viewMatrix, matrixRotateX);
+		viewMatrix = Matrix4::MultiplyAB(viewMatrix, viewPosition);
+
 		m_pRenderer->SetViewMatrix(viewMatrix);
 	}
 
@@ -276,18 +299,32 @@ void MainClass::__SetRenderCamera()
 	{
 		const f32 zNear = 1024.f;
 		const f32 zFar = 5120.f;
+		const f32 zMid = (zNear + zFar) / 2.f;
 
-		Matrix4 projectionPosition;
-		projectionPosition.SetTranslation(Vector3(0.0f, 0.0f, -zNear));
+		// change coordinate system from world -> directx.
+		Matrix4 projectionCoords;
+		projectionCoords.SetIdentity();
+		projectionCoords.m[1][1] = 0.0f;
+		projectionCoords.m[1][2] = -1.0f;
+		projectionCoords.m[2][2] = 0.0f;
+		projectionCoords.m[2][1] = 1.0f;
 
-		Matrix4 projectionScale;
-		f32 scaleX = 2.f / static_cast<f32>(m_pRenderer->GetWidth());
-		f32 scaleY = 2.f / static_cast<f32>(m_pRenderer->GetHeight());
+		// move 0.0 into the middle of z.
+		Matrix4 projectionMoveZ;
+		projectionMoveZ.SetTranslation(Vector3(0.f, 0.f, zMid - zNear));
+
+		// meters -> directx.
+		const Vector2& screenSizeWorld = m_pRenderer->GetRenderScreenSizeWorld();
+		f32 scaleX = 2.f / screenSizeWorld.x;
+		f32 scaleY = 2.f / screenSizeWorld.y;
 		f32 scaleZ = 1.f / (zFar - zNear);
+		Matrix4 projectionScale;
 		projectionScale.SetScale(Vector3(scaleX, scaleY, scaleZ));
 
-		projectionMatrix = projectionPosition;
-		projectionMatrix = Matrix4::MultiplyAB(projectionScale, projectionMatrix);
+		projectionMatrix = projectionScale;
+		projectionMatrix = Matrix4::MultiplyAB(projectionMatrix, projectionMoveZ);
+		projectionMatrix = Matrix4::MultiplyAB(projectionMatrix, projectionCoords);
+
 		m_pRenderer->SetProjectionMatrix(projectionMatrix);
 	}
 
@@ -325,7 +362,7 @@ void MainClass::__Shutdown()
 {
 	m_pClientGlobals->Shutdown();
 
-	RELEASEI(m_pModel);
+	OBJFREE(m_pWorld);
 	OBJFREE(m_pRenderer);
 	OBJFREE(m_pClientGlobals);
 	OBJFREE(m_eventQueue);

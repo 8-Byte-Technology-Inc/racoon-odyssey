@@ -324,9 +324,12 @@ void RenderMain::__SetScreenSizePixels(const IVector2& screenSizePixels, s32 dpi
 
 	m_dataRender.m_screenSizePixels = screenSizePixels;
 
-	// world coordinates in meters, 1 meter = 2 screen inches.
-	m_dataRender.m_screenSizeWorld.x = static_cast<f32>(screenSizePixels.x) / (2.f * static_cast<f32>(dpi));
-	m_dataRender.m_screenSizeWorld.y = static_cast<f32>(screenSizePixels.y) / (2.f * static_cast<f32>(dpi));
+	// world coordinates in meters, let 1 meter = 2 screen inches.
+	const f32 pixelsPerMeter = static_cast<f32>(dpi) * 2.f;
+	const f32 pixelSizeWorld = 1.f / pixelsPerMeter;
+
+	m_dataRender.m_screenSizeWorld.x = static_cast<f32>(screenSizePixels.x) * pixelSizeWorld;
+	m_dataRender.m_screenSizeWorld.y = static_cast<f32>(screenSizePixels.y) * pixelSizeWorld;
 }
 
 void RenderMain::__ConfigureBuffers()

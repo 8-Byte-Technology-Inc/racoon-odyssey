@@ -73,5 +73,8 @@
     <ProjectReference Include="..\Render\Render.vcxproj">
       <Project>{8cd1e338-dabe-458a-8090-a984fa6d5c34}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\World\World.vcxproj">
+      <Project>{50d66a79-d46d-4b7e-95d1-2bd45559b5c0}</Project>
+    </ProjectReference>
   </ItemGroup>
 </Project>

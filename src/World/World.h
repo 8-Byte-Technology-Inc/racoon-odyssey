@@ -12,10 +12,31 @@
 namespace TB8
 {
 
+struct MapModelBox
+{
+	Vector3							m_center;
+	Vector3							m_coords[8];
+};
+
+struct MapModel
+{
+	MapModel()
+		: m_modelID(0)
+		, m_pModel(nullptr)
+		, m_transform()
+	{
+	}
+
+	u32								m_modelID;
+	RenderModel*					m_pModel;
+	Matrix4							m_transform;
+	MapModelBox						m_volume;
+};
+
 struct MapCell
 {
-	u32		m_tileID;
-	u32		m_wallID[4];
+	MapModel		m_tile;
+	MapModel		m_wall[4];
 };
 
 class World : public Client_Globals_Accessor
@@ -32,9 +53,20 @@ public:
 
 	const Vector3& GetCharacterPosition() const { return m_characterPosition; }
 
+	void Update(s32 frameCount);
 	void Render(RenderMain* pRenderer);
 
 protected:
+	void __Initialize();
+	void __Uninitialize();
+
+	void __EventHandler(EventMessage* pEvent);
+
+	Matrix4 __ComputeCharacterModelWorldTransform(const Vector3& pos, f32 rotation);
+
+	bool __IsCollision(const MapModelBox& boxA, const MapModelBox& boxB, Vector3* pDist);
+	bool __IsCollision(const Vector3& vector, const MapModelBox& boxA, const MapModelBox& boxB, f32* pDist);
+
 	void __ParseMapStartElement(const u8* name, const u8** atts);
 	void __ParseMapCharacters(const u8* value, int len);
 	void __ParseMapEndElement(const u8* name);
@@ -47,8 +79,9 @@ protected:
 	std::vector<MapCell>			m_map;
 	std::map<u32, RenderModel*>		m_mapModels;
 
-	RenderModel*					m_pCharacterModel;
+	MapModel						m_characterModel;
 
+	f32								m_characterMass;
 	f32								m_characterFacing;
 	Vector3							m_characterPosition;
 	Vector3							m_characterForce;

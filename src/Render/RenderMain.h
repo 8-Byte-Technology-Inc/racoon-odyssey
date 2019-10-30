@@ -66,6 +66,7 @@ public:
 	void SetRenderMousePos(const IVector2& pos);
 	RenderScaleSize GetRenderScaleSize() const { return m_dataRender.m_scaleSize; }
 	const IVector2& GetRenderScreenSize() const { return m_dataRender.m_screenSizePixels; }
+	s32 GetRenderDPI() const { return m_dataRender.m_dpi; }
 	const Vector2& GetRenderScreenSizeWorld() const { return m_dataRender.m_screenSizeWorld; }
 
 	void DrawCursor();
