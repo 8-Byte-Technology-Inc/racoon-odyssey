@@ -12,10 +12,25 @@
 namespace TB8
 {
 
-struct MapModelBox
+enum MapModelBounds_Type : u32
 {
+	MapModelBounds_Type_None,
+	MapModelBounds_Type_Box,
+	MapModelBounds_Type_Sphere,
+};
+
+struct MapModelBounds
+{
+	MapModelBounds()
+		: m_type(MapModelBounds_Type_None)
+		, m_radius(0.f)
+	{
+	}
+
+	MapModelBounds_Type				m_type;
 	Vector3							m_center;
 	Vector3							m_coords[8];
+	f32								m_radius;
 };
 
 struct MapModel
@@ -23,14 +38,22 @@ struct MapModel
 	MapModel()
 		: m_modelID(0)
 		, m_pModel(nullptr)
-		, m_transform()
+		, m_pos()
+		, m_rotation(0.f)
+		, m_scale(0.f)
+		, m_worldLocalTransform()
+		, m_worldTransformRender()
 	{
 	}
 
 	u32								m_modelID;
 	RenderModel*					m_pModel;
-	Matrix4							m_transform;
-	MapModelBox						m_volume;
+	Vector3							m_pos;
+	f32								m_rotation;
+	f32								m_scale;
+	Matrix4							m_worldLocalTransform;
+	Matrix4							m_worldTransformRender;
+	MapModelBounds					m_bounds;
 };
 
 struct MapCell
@@ -51,7 +74,7 @@ public:
 	void LoadMap(const char* pszMapPath);
 	void LoadCharacter(const char* pszCharacterModelPath, const char* pszModelName);
 
-	const Vector3& GetCharacterPosition() const { return m_characterPosition; }
+	const Vector3& GetCharacterPosition() const { return m_characterModel.m_pos; }
 
 	void Update(s32 frameCount);
 	void Render(RenderMain* pRenderer);
@@ -62,10 +85,18 @@ protected:
 
 	void __EventHandler(EventMessage* pEvent);
 
-	Matrix4 __ComputeCharacterModelWorldTransform(const Vector3& pos, f32 rotation);
+	void __ComputeModelWorldLocalTransform(MapModel& model);
+	void __ComputeModelWorldTransformRender(MapModel& model, Matrix4* pWorldTransform);
+	void __ComputeCharacterModelBox(MapModel& model, MapModelBounds* pBounds);
+	void __ComputeCharacterModelSphere(MapModel& model, MapModelBounds* pBounds);
 
-	bool __IsCollision(const MapModelBox& boxA, const MapModelBox& boxB, Vector3* pDist);
-	bool __IsCollision(const Vector3& vector, const MapModelBox& boxA, const MapModelBox& boxB, f32* pDist);
+	void __AdjustCharacterModelPositionForCollisions(Vector3& pos, Vector3& vel);
+	void __AdjustCharacterModelPositionForCollisionsAxis(Vector3& pos, Vector3& vel, const Vector3& axis);
+	bool __IsCharacterModelCollideWithWall(const Vector3& posNew) const;
+	bool __IsCollision(const MapModelBounds& boundsA, const MapModelBounds& boundsB) const;
+	bool __IsCollisionAlongNormal(const Vector3& projection, const MapModelBounds& boundsA, const MapModelBounds& boundsB) const;
+
+	Vector3 __AlignPosition(const Vector3& position);
 
 	void __ParseMapStartElement(const u8* name, const u8** atts);
 	void __ParseMapCharacters(const u8* value, int len);
@@ -73,6 +104,7 @@ protected:
 	static XML_Parser_Result __ParseMapRead(TB8::File* f, u8* pBuf, u32* pSize);
 
 	MapCell& __GetCell(const IVector2& pos) { return m_map[(pos.y * m_mapSize.x) + pos.x]; }
+	const MapCell& __GetCell(const IVector2& pos) const { return m_map[(pos.y * m_mapSize.x) + pos.x]; }
 
 	std::string						m_mapPath;
 	IVector2						m_mapSize;
@@ -82,8 +114,6 @@ protected:
 	MapModel						m_characterModel;
 
 	f32								m_characterMass;
-	f32								m_characterFacing;
-	Vector3							m_characterPosition;
 	Vector3							m_characterForce;
 	Vector3							m_characterVelocity;
 };

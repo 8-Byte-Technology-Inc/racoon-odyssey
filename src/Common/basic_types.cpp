@@ -21,6 +21,19 @@ void Vector2::Normalize()
 	y = y / len;
 }
 
+Vector3 Vector3::Cross(const Vector3& u, const Vector3& v)
+{
+	return Vector3((u.y * v.z - u.z * v.y), (u.z * v.x - u.x * v.z), (u.x * v.y - u.y * v.x));
+}
+
+Vector3 Vector3::ComputeNormal(const Vector3& o, const Vector3& p1, const Vector3& p2)
+{
+	const Vector3 u(p1.x - o.x, p1.y - o.y, p1.z - o.z);
+	const Vector3 v(p2.x - o.x, p2.y - o.y, p2.z - o.z);
+	const Vector3 x = Vector3::Cross(u, v);
+	return Vector3::Normalize(x);
+}
+
 Vector3 operator +(const Vector3& a, const Vector3& b)
 {
 	return Vector3(a.x + b.x, a.y + b.y, a.z + b.z);

@@ -21,7 +21,6 @@ const f32 TILES_PER_METER = 1.0f;
 
 World::World(Client_Globals* pGlobalState)
 	: Client_Globals_Accessor(pGlobalState)
-	, m_characterFacing(0.f)
 	, m_characterMass(2.f)
 {
 }
@@ -68,26 +67,18 @@ void World::LoadCharacter(const char* pszCharacterModelPath, const char* pszMode
 	RenderModel* pModel = RenderModel::AllocFromDAE(__GetRenderer(), __GetPathAssets().c_str(), pszCharacterModelPath, pszModelName);
 	m_mapModels.insert(std::make_pair(0, pModel));
 
-	m_characterModel.m_pModel = pModel;
-
-	const std::vector<RenderModel_Mesh>& meshes = m_characterModel.m_pModel->GetMeshes();
+	const std::vector<RenderModel_Mesh>& meshes = pModel->GetMeshes();
 	assert(!meshes.empty());
 	const RenderModel_Mesh& mesh = meshes.front();
 
-	MapModelBox& box = m_characterModel.m_volume;
+	m_characterModel.m_modelID = 0;
+	m_characterModel.m_pModel = pModel;
+	// scale the model so <y> is 0.75 meters.
+	m_characterModel.m_scale = .75f / mesh.m_size.y;
 
-	box.m_center = Vector3((mesh.m_max.x + mesh.m_min.x) / 2.f, (mesh.m_max.y + mesh.m_min.y) / 2.f, (mesh.m_max.z + mesh.m_min.z) / 2.f);
-	box.m_coords[0] = Vector3(mesh.m_min.x, mesh.m_min.y, mesh.m_min.z);
-	box.m_coords[1] = Vector3(mesh.m_max.x, mesh.m_min.y, mesh.m_min.z);
-	box.m_coords[2] = Vector3(mesh.m_max.x, mesh.m_max.y, mesh.m_min.z);
-	box.m_coords[3] = Vector3(mesh.m_min.x, mesh.m_max.y, mesh.m_min.z);
-	box.m_coords[4] = Vector3(mesh.m_min.x, mesh.m_min.y, mesh.m_max.z);
-	box.m_coords[5] = Vector3(mesh.m_max.x, mesh.m_min.y, mesh.m_max.z);
-	box.m_coords[6] = Vector3(mesh.m_max.x, mesh.m_max.y, mesh.m_max.z);
-	box.m_coords[7] = Vector3(mesh.m_min.x, mesh.m_max.y, mesh.m_max.z);
-
-	// load default transform.
-	m_characterModel.m_transform = __ComputeCharacterModelWorldTransform(m_characterPosition, m_characterFacing);
+	__ComputeModelWorldLocalTransform(m_characterModel);
+	__ComputeModelWorldTransformRender(m_characterModel, &(m_characterModel.m_worldTransformRender));
+	__ComputeCharacterModelSphere(m_characterModel, &(m_characterModel.m_bounds));
 }
 
 void World::Update(s32 frameCount)
@@ -100,12 +91,9 @@ void World::Update(s32 frameCount)
 	const f32 elapsedTime = static_cast<f32>(frameCount) / 60.f;
 	const f32 velocityMax = 5.f; // m/s.
 
-	Vector3 forceChar;
-	forceChar.x = m_characterForce.x * forceFactor;
-	forceChar.y = m_characterForce.y * forceFactor;
-	forceChar.z = m_characterForce.z * forceFactor;
+	const Vector3 forceChar = m_characterForce * forceFactor;
 
-	const f32 velTotalSq = (m_characterVelocity.x * m_characterVelocity.x) + (m_characterVelocity.y * m_characterVelocity.y) + (m_characterVelocity.z * m_characterVelocity.z);
+	const f32 velTotalSq = m_characterVelocity.MagSq();
 
 	Vector3 forceEnv;
 	forceEnv.x = (forceDampen + (velTotalSq * windResistFactor)) * get_sign(m_characterVelocity.x) * -1.f;
@@ -113,22 +101,13 @@ void World::Update(s32 frameCount)
 	forceEnv.z = (m_characterMass * gravityFactor) * -1.f;
 
 	// compute net force.
-	Vector3 forceNet;
-	forceNet.x = forceChar.x + forceEnv.x;
-	forceNet.y = forceChar.y + forceEnv.y;
-	forceNet.z = forceChar.z + forceEnv.z;
+	const Vector3 forceNet = forceChar + forceEnv;
 
 	// compute accel.
-	Vector3 accel;
-	accel.x = forceNet.x / m_characterMass;
-	accel.y = forceNet.y / m_characterMass;
-	accel.z = forceNet.z / m_characterMass;
+	const Vector3 accel = forceNet / m_characterMass;
 
 	// compute new velocity.
-	Vector3 vel;
-	vel.x = m_characterVelocity.x + (accel.x * elapsedTime);
-	vel.y = m_characterVelocity.y + (accel.y * elapsedTime);
-	vel.z = m_characterVelocity.z + (accel.z * elapsedTime);
+	Vector3 vel = m_characterVelocity + (accel * elapsedTime);
 
 	// don't exceed max velocity.
 	vel.x = std::min<f32>(abs(vel.x), velocityMax) * get_sign(vel.x);
@@ -155,50 +134,20 @@ void World::Update(s32 frameCount)
 			vel.y = 0.f;
 	}
 
-	Vector3 vel0 = m_characterVelocity;
-	Vector3 vel1 = vel;
+	const Vector3& vel0 = m_characterVelocity;
+	const Vector3& vel1 = vel;
 
 	// compute new position.
-	Vector3 pos;
-	pos.x = m_characterPosition.x + ((vel0.x + (0.5f * (vel1.x - vel0.x))) * elapsedTime);
-	pos.y = m_characterPosition.y + ((vel0.y + (0.5f * (vel1.y - vel0.y))) * elapsedTime);
-	pos.z = m_characterPosition.z + ((vel0.z + (0.5f * (vel1.z - vel0.z))) * elapsedTime);
+	Vector3 pos = m_characterModel.m_pos + (vel0 + ((vel1 - vel0) * 0.5f)) * elapsedTime;
 
 	// compute new facing.
-	f32 facing = m_characterFacing;
+	f32 facing = m_characterModel.m_rotation;
 	if (!is_approx_zero(vel1.x) || !is_approx_zero(vel1.y))
 	{
 		Vector2 facingVector(vel1.x, vel1.y);
 		facingVector.Normalize();
 		const f32 angle = std::atan2(facingVector.y, facingVector.x);
 		facing = (angle / DirectX::XM_PI) * 180.f;
-	}
-
-	// compute new transform.
-	Matrix4 worldTransform = __ComputeCharacterModelWorldTransform(pos, facing);
-
-	// compute new bounding box.
-	MapModelBox box;
-	{
-		const std::vector<RenderModel_Mesh>& meshes = m_characterModel.m_pModel->GetMeshes();
-		assert(!meshes.empty());
-		const RenderModel_Mesh& mesh = meshes.front();
-
-		box.m_center = Vector3((mesh.m_max.x + mesh.m_min.x) / 2.f, (mesh.m_max.y + mesh.m_min.y) / 2.f, (mesh.m_max.z + mesh.m_min.z) / 2.f);
-		box.m_coords[0] = Vector3(mesh.m_min.x, mesh.m_min.y, mesh.m_min.z);
-		box.m_coords[1] = Vector3(mesh.m_max.x, mesh.m_min.y, mesh.m_min.z);
-		box.m_coords[2] = Vector3(mesh.m_max.x, mesh.m_max.y, mesh.m_min.z);
-		box.m_coords[3] = Vector3(mesh.m_min.x, mesh.m_max.y, mesh.m_min.z);
-		box.m_coords[4] = Vector3(mesh.m_min.x, mesh.m_min.y, mesh.m_max.z);
-		box.m_coords[5] = Vector3(mesh.m_max.x, mesh.m_min.y, mesh.m_max.z);
-		box.m_coords[6] = Vector3(mesh.m_max.x, mesh.m_max.y, mesh.m_max.z);
-		box.m_coords[7] = Vector3(mesh.m_min.x, mesh.m_max.y, mesh.m_max.z);
-
-		box.m_center = Matrix4::MultiplyVector(box.m_center, worldTransform);
-		for (u32 i = 0; i < ARRAYSIZE(box.m_coords); ++i)
-		{
-			box.m_coords[i] = Matrix4::MultiplyVector(box.m_coords[i], worldTransform);
-		}
 	}
 
 	// can't go lower than 0.
@@ -208,64 +157,15 @@ void World::Update(s32 frameCount)
 		vel.z = 0.f;
 	}
 
-	// did we collide with a wall?
-	{
-		// compute which tiles to examine for collisions.
-		IRect tiles;
-		tiles.left = static_cast<u32>(std::min<f32>(pos.x, m_characterPosition.x) / TILES_PER_METER) - 1;
-		tiles.right = static_cast<u32>(std::max<f32>(pos.x, m_characterPosition.x) / TILES_PER_METER) + 1;
-		tiles.top = static_cast<u32>(std::min<f32>(pos.y, m_characterPosition.y) / TILES_PER_METER) - 1;
-		tiles.bottom = static_cast<u32>(std::max<f32>(pos.y, m_characterPosition.y) / TILES_PER_METER) + 1;
-
-		// look at walls for each tile.
-		IVector2 cellPos;
-		bool isCollision = false;
-		Vector3 distMin(0.f, 0.f, 0.f);
-		for (cellPos.x = tiles.left; cellPos.x < tiles.right; ++cellPos.x)
-		{
-			for (cellPos.y = tiles.top; cellPos.y < tiles.bottom; ++cellPos.y)
-			{
-				MapCell& cell = __GetCell(cellPos);
-				for (u32 i = 0; i < ARRAYSIZE(cell.m_wall); ++i)
-				{
-					MapModel& wallModel = cell.m_wall[i];
-					if (!wallModel.m_pModel)
-						continue;
-					Vector3 dist;
-					if (!__IsCollision(box, wallModel.m_volume, &dist))
-						continue;
-					isCollision = true;
-					if (dist.Mag() > distMin.Mag())
-						distMin = dist;
-				}
-			}
-		}
-#if 0
-		if (isCollision)
-		{
-			const Vector3 vectorReverse = m_characterPosition - pos;
-			const f32 reverseMag = vectorReverse.Mag();
-			const Vector3 vectorReverseNormalized = vectorReverse / reverseMag;
-			const f32 projectedReverse = Vector3::Dot(distMin, vectorReverseNormalized);
-			const f32 ratio = projectedReverse / reverseMag;
-			const Vector3 actualReverse = vectorReverse * ratio;;
-
-			pos = pos + actualReverse;
-			vel.x = 0;
-			vel.y = 0;
-			vel.z = 0;
-
-			worldTransform = __ComputeCharacterModelWorldTransform(pos, facing);
-		}
-#endif
-	}
+	// adjust position & velocity for collisions.
+	__AdjustCharacterModelPositionForCollisions(pos, vel);
 
 	// update.
-	m_characterPosition = pos;
+	m_characterModel.m_pos = pos;
+	m_characterModel.m_rotation = facing;
 	m_characterVelocity = vel;
-	m_characterFacing = facing;
-	m_characterModel.m_transform = worldTransform;
-	//m_characterModel.m_volume = box;
+	__ComputeModelWorldTransformRender(m_characterModel, &(m_characterModel.m_worldTransformRender));
+	__ComputeCharacterModelSphere(m_characterModel, &(m_characterModel.m_bounds));
 }
 
 void World::Render(RenderMain* pRenderer)
@@ -276,10 +176,10 @@ void World::Render(RenderMain* pRenderer)
 
 	// compute which tiles we'll draw.
 	IRect tiles;
-	tiles.left = static_cast<u32>((m_characterPosition.x - ((screenSizeWorld.x / 2.f) * 3.f) / TILES_PER_METER));
-	tiles.right = static_cast<u32>((m_characterPosition.x + ((screenSizeWorld.x / 2.f) * 3.f) / TILES_PER_METER)) + 1;
-	tiles.top = static_cast<u32>((m_characterPosition.y - ((screenSizeWorld.y / 2.f) * 3.f) / TILES_PER_METER));
-	tiles.bottom = static_cast<u32>((m_characterPosition.y + ((screenSizeWorld.y / 2.f) * 3.f) / TILES_PER_METER)) + 1;
+	tiles.left = static_cast<u32>((m_characterModel.m_pos.x - ((screenSizeWorld.x / 2.f) * 3.f) / TILES_PER_METER));
+	tiles.right = static_cast<u32>((m_characterModel.m_pos.x + ((screenSizeWorld.x / 2.f) * 3.f) / TILES_PER_METER)) + 1;
+	tiles.top = static_cast<u32>((m_characterModel.m_pos.y - ((screenSizeWorld.y / 2.f) * 3.f) / TILES_PER_METER));
+	tiles.bottom = static_cast<u32>((m_characterModel.m_pos.y + ((screenSizeWorld.y / 2.f) * 3.f) / TILES_PER_METER)) + 1;
 
 	// draw the tiles & walls.
 	IVector2 cellPos;
@@ -292,7 +192,7 @@ void World::Render(RenderMain* pRenderer)
 				MapModel& model = cell.m_tile;
 				if (model.m_pModel)
 				{
-					model.m_pModel->SetWorldTransform(model.m_transform);
+					model.m_pModel->SetWorldTransform(model.m_worldTransformRender);
 					model.m_pModel->Render(pRenderer);
 				}
 			}
@@ -302,7 +202,7 @@ void World::Render(RenderMain* pRenderer)
 				MapModel& model = cell.m_wall[i];
 				if (model.m_pModel)
 				{
-					model.m_pModel->SetWorldTransform(model.m_transform);
+					model.m_pModel->SetWorldTransform(model.m_worldTransformRender);
 					model.m_pModel->Render(pRenderer);
 				}
 			}
@@ -311,7 +211,7 @@ void World::Render(RenderMain* pRenderer)
 
 	// draw the character.
 	{
-		m_characterModel.m_pModel->SetWorldTransform(m_characterModel.m_transform);
+		m_characterModel.m_pModel->SetWorldTransform(m_characterModel.m_worldTransformRender);
 		m_characterModel.m_pModel->Render(pRenderer);
 	}
 }
@@ -368,20 +268,36 @@ void World::__EventHandler(EventMessage* pEvent)
 	}
 }
 
-Matrix4 World::__ComputeCharacterModelWorldTransform(const Vector3& pos, f32 facing)
+Vector3 World::__AlignPosition(const Vector3& position)
 {
-	const std::vector<RenderModel_Mesh>& meshes = m_characterModel.m_pModel->GetMeshes();
+	// align character position to screen pixels.
+	const f32 pixelsPerMeter = __GetRenderer()->GetRenderDPI() * 2.f;
+
+	Vector3 vectorAlign;
+	vectorAlign.x = 1.0f / pixelsPerMeter;
+	vectorAlign.y = (1.0f / pixelsPerMeter) / sin(DirectX::XM_PI / 8.f);
+
+	Vector3 positionAligned;
+	positionAligned.x = static_cast<f32>(static_cast<s64>(position.x / vectorAlign.x))* vectorAlign.x;
+	positionAligned.y = static_cast<f32>(static_cast<s64>(position.y / vectorAlign.y))* vectorAlign.y;
+	positionAligned.z = position.z;
+
+	return positionAligned;
+}
+
+void World::__ComputeModelWorldLocalTransform(MapModel& model)
+{
+	const std::vector<RenderModel_Mesh>& meshes = model.m_pModel->GetMeshes();
 	assert(!meshes.empty());
 	const RenderModel_Mesh& mesh = meshes.front();
 
 	// center it, still in directX coords.
 	Matrix4 matrixCenter;
-	matrixCenter.SetTranslation(Vector3(0.f - m_characterModel.m_volume.m_center.x, 0.f - mesh.m_min.y, 0.f - m_characterModel.m_volume.m_center.z));
+	matrixCenter.SetTranslation(Vector3(0.f - ((mesh.m_max.x + mesh.m_min.x) / 2.f), 0.f - mesh.m_min.y, 0.f - ((mesh.m_max.z + mesh.m_min.z) / 2.f)));
 
-	// scale the model so <y> is 1/2 meter.
-	const f32 scale = .75f / mesh.m_size.y;
+	// scale it.
 	Matrix4 matrixScale;
-	matrixScale.SetScale(Vector3(scale, scale, scale));
+	matrixScale.SetScale(Vector3(model.m_scale, model.m_scale, model.m_scale));
 
 	// translate from directX to world coordinate system.
 	Matrix4 matrixCoordsToWorld;
@@ -391,77 +307,280 @@ Matrix4 World::__ComputeCharacterModelWorldTransform(const Vector3& pos, f32 fac
 	matrixCoordsToWorld.m[2][2] = 0.0f;
 	matrixCoordsToWorld.m[1][2] = 1.0f;
 
+	model.m_worldLocalTransform = matrixCoordsToWorld;
+	model.m_worldLocalTransform = Matrix4::MultiplyAB(model.m_worldLocalTransform, matrixScale);
+	model.m_worldLocalTransform = Matrix4::MultiplyAB(model.m_worldLocalTransform, matrixCenter);
+}
+
+void World::__ComputeModelWorldTransformRender(MapModel& model, Matrix4* pWorldTransform)
+{
 	// rotate it.
 	Matrix4 matrixRotate;
-	matrixRotate.SetRotate(Vector3(0.f, 0.f, DirectX::XM_PI * (facing) / 180.f));
+	matrixRotate.SetRotate(Vector3(0.f, 0.f, DirectX::XM_PI * (model.m_rotation) / 180.f));
 
 	// position it.
 	Matrix4 matrixPosition;
-	matrixPosition.SetTranslation(pos);
+	matrixPosition.SetTranslation(__AlignPosition(model.m_pos));
+
+	// compute the overall transform.
+	*pWorldTransform = matrixPosition;
+	*pWorldTransform  = Matrix4::MultiplyAB(*pWorldTransform, matrixRotate);
+	*pWorldTransform  = Matrix4::MultiplyAB(*pWorldTransform, model.m_worldLocalTransform);
+}
+
+void World::__ComputeCharacterModelBox(MapModel& model, MapModelBounds* pBounds)
+{
+	const std::vector<RenderModel_Mesh>& meshes = model.m_pModel->GetMeshes();
+	assert(!meshes.empty());
+	const RenderModel_Mesh& mesh = meshes.front();
+
+	// rotate it.
+	Matrix4 matrixRotate;
+	matrixRotate.SetRotate(Vector3(0.f, 0.f, DirectX::XM_PI * (model.m_rotation) / 180.f));
+
+	// position it.
+	Matrix4 matrixPosition;
+	matrixPosition.SetTranslation(model.m_pos);
 
 	// compute the overall transform.
 	Matrix4 worldTransform = matrixPosition;
 	worldTransform = Matrix4::MultiplyAB(worldTransform, matrixRotate);
-	worldTransform = Matrix4::MultiplyAB(worldTransform, matrixCoordsToWorld);
-	worldTransform = Matrix4::MultiplyAB(worldTransform, matrixScale);
-	worldTransform = Matrix4::MultiplyAB(worldTransform, matrixCenter);
+	worldTransform = Matrix4::MultiplyAB(worldTransform, model.m_worldLocalTransform);
 
-	return worldTransform;
+	pBounds->m_type = MapModelBounds_Type_Box;
+	pBounds->m_center = Vector3((mesh.m_max.x + mesh.m_min.x) / 2.f, (mesh.m_max.y + mesh.m_min.y) / 2.f, (mesh.m_max.z + mesh.m_min.z) / 2.f);
+	pBounds->m_coords[0] = Vector3(mesh.m_min.x, mesh.m_min.y, mesh.m_min.z);
+	pBounds->m_coords[1] = Vector3(mesh.m_max.x, mesh.m_min.y, mesh.m_min.z);
+	pBounds->m_coords[2] = Vector3(mesh.m_max.x, mesh.m_max.y, mesh.m_min.z);
+	pBounds->m_coords[3] = Vector3(mesh.m_min.x, mesh.m_max.y, mesh.m_min.z);
+	pBounds->m_coords[4] = Vector3(mesh.m_min.x, mesh.m_min.y, mesh.m_max.z);
+	pBounds->m_coords[5] = Vector3(mesh.m_max.x, mesh.m_min.y, mesh.m_max.z);
+	pBounds->m_coords[6] = Vector3(mesh.m_max.x, mesh.m_max.y, mesh.m_max.z);
+	pBounds->m_coords[7] = Vector3(mesh.m_min.x, mesh.m_max.y, mesh.m_max.z);
+
+	pBounds->m_center = Matrix4::MultiplyVector(pBounds->m_center, worldTransform);
+	for (u32 i = 0; i < ARRAYSIZE(pBounds->m_coords); ++i)
+	{
+		pBounds->m_coords[i] = Matrix4::MultiplyVector(pBounds->m_coords[i], worldTransform);
+	}
 }
 
-bool World::__IsCollision(const MapModelBox& boxA, const MapModelBox& boxB, Vector3* pDist)
+void World::__ComputeCharacterModelSphere(MapModel& model, MapModelBounds* pBounds)
 {
-	f32 distA = 100.f;
-	if (!__IsCollision(Vector3(1.0, 0.0, 0.0), boxA, boxB, &distA))
-		return false;
-	f32 distB = 100.f;
-	if (!__IsCollision(Vector3(0.0, 1.0, 0.0), boxA, boxB, &distB))
-		return false;
-	f32 distC = 100.f;
-	if (!__IsCollision(Vector3(0.0, 0.0, 1.0), boxA, boxB, &distC))
-		return false;
+	const std::vector<RenderModel_Mesh>& meshes = model.m_pModel->GetMeshes();
+	assert(!meshes.empty());
+	const RenderModel_Mesh& mesh = meshes.front();
 
-	if (distA > distB && distA > distC)
+	// rotate it.
+	Matrix4 matrixRotate;
+	matrixRotate.SetRotate(Vector3(0.f, 0.f, DirectX::XM_PI * (model.m_rotation) / 180.f));
+
+	// position it.
+	Matrix4 matrixPosition;
+	matrixPosition.SetTranslation(model.m_pos);
+
+	// compute the overall transform.
+	Matrix4 worldTransform = matrixPosition;
+	worldTransform = Matrix4::MultiplyAB(worldTransform, matrixRotate);
+	worldTransform = Matrix4::MultiplyAB(worldTransform, model.m_worldLocalTransform);
+
+	const Vector3 vCenter((mesh.m_max.x + mesh.m_min.x) / 2.f, (mesh.m_max.y + mesh.m_min.y) / 2.f, (mesh.m_max.z + mesh.m_min.z) / 2.f);
+	const f32 radius = std::max<f32>(std::max<f32>(mesh.m_max.x - mesh.m_min.x, mesh.m_max.y - mesh.m_min.y), mesh.m_max.z - mesh.m_min.z) / 2.f;
+
+	pBounds->m_type = MapModelBounds_Type_Sphere;
+	pBounds->m_center = Matrix4::MultiplyVector(vCenter, worldTransform);
+	pBounds->m_radius = radius * model.m_scale;
+}
+
+void World::__AdjustCharacterModelPositionForCollisions(Vector3& pos, Vector3& vel)
+{
+	if (!__IsCharacterModelCollideWithWall(pos))
+		return;
+
+	__AdjustCharacterModelPositionForCollisionsAxis(pos, vel, Vector3(1.f, 0.f, 0.f));
+	__AdjustCharacterModelPositionForCollisionsAxis(pos, vel, Vector3(0.f, 1.f, 0.f));
+	__AdjustCharacterModelPositionForCollisionsAxis(pos, vel, Vector3(0.f, 0.f, 1.f));
+}
+
+void World::__AdjustCharacterModelPositionForCollisionsAxis(Vector3& pos, Vector3& vel, const Vector3& axis)
+{
+	const MapModel& model = m_characterModel;
+	const Vector3 posDelta = pos - model.m_pos;
+	const f32 posDeltaAxisMag = Vector3::Dot(posDelta, axis);
+	if (is_approx_zero(posDeltaAxisMag))
+		return;
+	if (!__IsCharacterModelCollideWithWall(model.m_pos + (axis * posDeltaAxisMag)))
+		return;
+
+	// this axis collides. interpolate position.
+	f32 min = 0.f;
+	f32 max = posDeltaAxisMag;
+
+	for (u32 i = 0; i < 8; ++i)
 	{
-		*pDist = Vector3(distA, 0.f, 0.f);
+		const f32 mid = (max + min) / 2.f;
+		if (__IsCharacterModelCollideWithWall(model.m_pos + (axis * mid)))
+		{
+			max = mid;
+		}
+		else
+		{
+			min = mid;
+		}
 	}
-	else if (distB > distA&& distB > distC)
+
+	// set revised position.
+	if (!is_approx_zero(axis.x))
 	{
-		*pDist = Vector3(0.f, distB, 0.f);
+		pos.x = model.m_pos.x + min;
+		vel.x = 0.f;
 	}
-	else
+	if (!is_approx_zero(axis.y))
 	{
-		*pDist = Vector3(0.f, 0.f, distC);
+		pos.y = model.m_pos.y + min;
+		vel.y = 0.f;
 	}
+	if (!is_approx_zero(axis.z))
+	{
+		pos.z = model.m_pos.z + min;
+		vel.z = 0.f;
+	}
+}
+
+
+bool World::__IsCharacterModelCollideWithWall(const Vector3& posNew) const
+{
+	const MapModel& model = m_characterModel;
+	const Vector3 posDelta = posNew - model.m_pos;
+
+	MapModelBounds boundsNew = model.m_bounds;
+	boundsNew.m_center = boundsNew.m_center + posDelta;
+
+	// compute which tiles to examine for collisions.
+	IRect tiles;
+	tiles.left = static_cast<u32>(posNew.x / TILES_PER_METER) - 1;
+	tiles.right = static_cast<u32>(posNew.x / TILES_PER_METER) + 1;
+	tiles.top = static_cast<u32>(posNew.y / TILES_PER_METER) - 1;
+	tiles.bottom = static_cast<u32>(posNew.y / TILES_PER_METER) + 1;
+
+	// look at walls for each tile.
+	IVector2 cellPos;
+	for (cellPos.x = tiles.left; cellPos.x <= tiles.right; ++cellPos.x)
+	{
+		for (cellPos.y = tiles.top; cellPos.y <= tiles.bottom; ++cellPos.y)
+		{
+			const MapCell& cell = __GetCell(cellPos);
+			for (u32 i = 0; i < ARRAYSIZE(cell.m_wall); ++i)
+			{
+				const MapModel& wallModel = cell.m_wall[i];
+				if (!wallModel.m_pModel)
+					continue;
+				if (!__IsCollision(wallModel.m_bounds, boundsNew))
+					continue;
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+bool World::__IsCollision(const MapModelBounds& boundsA, const MapModelBounds& boundsB) const
+{
+	if (boundsA.m_type == MapModelBounds_Type_Box)
+	{
+		const Vector3 n1 = Vector3::ComputeNormal(boundsA.m_coords[0], boundsA.m_coords[1], boundsA.m_coords[3]);
+		if (!__IsCollisionAlongNormal(n1, boundsA, boundsB))
+			return false;
+		const Vector3 n2 = Vector3::ComputeNormal(boundsA.m_coords[1], boundsA.m_coords[2], boundsA.m_coords[5]);
+		if (!__IsCollisionAlongNormal(n1, boundsA, boundsB))
+			return false;
+		const Vector3 n3 = Vector3::ComputeNormal(boundsA.m_coords[0], boundsA.m_coords[4], boundsA.m_coords[1]);
+		if (!__IsCollisionAlongNormal(n1, boundsA, boundsB))
+			return false;
+	}
+
+	if (boundsB.m_type == MapModelBounds_Type_Box)
+	{
+		const Vector3 n1 = Vector3::ComputeNormal(boundsB.m_coords[0], boundsB.m_coords[1], boundsB.m_coords[3]);
+		if (!__IsCollisionAlongNormal(n1, boundsA, boundsB))
+			return false;
+		const Vector3 n2 = Vector3::ComputeNormal(boundsB.m_coords[1], boundsB.m_coords[2], boundsB.m_coords[5]);
+		if (!__IsCollisionAlongNormal(n1, boundsA, boundsB))
+			return false;
+		const Vector3 n3 = Vector3::ComputeNormal(boundsB.m_coords[0], boundsB.m_coords[4], boundsB.m_coords[1]);
+		if (!__IsCollisionAlongNormal(n1, boundsA, boundsB))
+			return false;
+	}
+
+	if ((boundsA.m_type == MapModelBounds_Type_Sphere)
+		&& (boundsB.m_type == MapModelBounds_Type_Sphere))
+	{
+		const Vector3 AB = boundsB.m_center - boundsA.m_center;
+		const Vector3 n = Vector3::Normalize(AB);
+		if (!__IsCollisionAlongNormal(n, boundsA, boundsB))
+			return false;
+	}
+
 	return true;
 }
 
-bool World::__IsCollision(const Vector3& projection, const MapModelBox& boxA, const MapModelBox& boxB, f32* pDist)
+bool World::__IsCollisionAlongNormal(const Vector3& normal, const MapModelBounds& boundsA, const MapModelBounds& boundsB) const
 {
-	const Vector3 centerToCenter(boxB.m_center.x - boxA.m_center.x, boxB.m_center.y - boxA.m_center.y, boxB.m_center.z - boxA.m_center.z);
-	const f32 projCenter = Vector3::Dot(centerToCenter, projection);
-	std::vector<f32> projA;
-	projA.resize(8);
-	std::vector<f32> projB;
-	projB.resize(8);
-	for (u32 i = 0; i < 8; ++i)
+	u32 cProjA = 0;
+	u32 cProjB = 0;
+	f32 projA[8];
+	f32 projB[8];
+
+	const Vector3 centerToCenter(boundsB.m_center.x - boundsA.m_center.x, boundsB.m_center.y - boundsA.m_center.y, boundsB.m_center.z - boundsA.m_center.z);
+	const f32 projCenter = Vector3::Dot(centerToCenter, normal);
+
+	if (boundsA.m_type == MapModelBounds_Type_Box)
 	{
-		projA[i] = Vector3::Dot(boxA.m_coords[i] - boxA.m_center, projection);
-		projB[i] = Vector3::Dot(boxB.m_coords[i] - boxB.m_center, projection);
+		assert(ARRAYSIZE(boundsA.m_coords) <= ARRAYSIZE(projA));
+		for (u32 i = 0; i < ARRAYSIZE(boundsA.m_coords); ++i)
+		{
+			projA[i] = Vector3::Dot(boundsA.m_coords[i] - boundsA.m_center, normal);
+		}
+		cProjA = ARRAYSIZE(boundsA.m_coords);
+		std::sort(projA, projA + cProjA);
+	}
+	else if (boundsA.m_type == MapModelBounds_Type_Sphere)
+	{
+		assert(2 <= ARRAYSIZE(projA));
+		projA[0] = -boundsA.m_radius;
+		projA[1] = +boundsA.m_radius;
+		cProjA = 2;
 	}
 
-	std::sort(projA.begin(), projA.end());
-	std::sort(projB.begin(), projB.end());
+	if (boundsB.m_type == MapModelBounds_Type_Box)
+	{
+		assert(ARRAYSIZE(boundsB.m_coords) <= ARRAYSIZE(projB));
+		for (u32 i = 0; i < ARRAYSIZE(boundsB.m_coords); ++i)
+		{
+			projB[i] = Vector3::Dot(boundsB.m_coords[i] - boundsB.m_center, normal);
+		}
+		cProjB = ARRAYSIZE(boundsB.m_coords);
+		std::sort(projB, projB + cProjB);
+	}
+	else if (boundsB.m_type == MapModelBounds_Type_Sphere)
+	{
+		assert(2 <= ARRAYSIZE(projB));
+		projB[0] = -boundsB.m_radius;
+		projB[1] = +boundsB.m_radius;
+		cProjB = 2;
+	}
 
 	if (projCenter < 0.f)
 	{
-		*pDist = (-1.f * projCenter) - projB.back() + projA.front();
+		const f32 dist = (-1.f * projCenter) - projB[cProjB - 1] + projA[0];
+		return dist < 0.f;
 	}
 	else
 	{
-		*pDist = projCenter - projA.back() + projB.front();
+		const f32 dist = projCenter - projA[cProjA - 1] + projB[0];
+		return dist < 0.f;
 	}
-	return (*pDist < 0.f);
 }
 
 void World::__ParseMapStartElement(const u8* pszName, const u8** ppAttribs)
@@ -560,13 +679,14 @@ void World::__ParseMapStartElement(const u8* pszName, const u8** ppAttribs)
 					Matrix4 matrixPosition;
 					matrixPosition.SetTranslation(Vector3(static_cast<f32>(pos.x), static_cast<f32>(pos.y), 0.f));
 
-					model.m_transform = matrixPosition;
+					model.m_worldTransformRender = matrixPosition;
 				}
 			}
 		}
 	}
 	if (_strcmpi(reinterpret_cast<const char*>(pszName), "start") == 0)
 	{
+		Vector3 posStart(0.f, 0.f, 0.f);
 		for (const u8** ppAttrib = ppAttribs; ppAttrib && *ppAttrib; ppAttrib += 2)
 		{
 			const char* pszAttribName = reinterpret_cast<const char*>(*(ppAttrib + 0));
@@ -574,13 +694,15 @@ void World::__ParseMapStartElement(const u8* pszName, const u8** ppAttribs)
 
 			if (_strcmpi(pszAttribName, "x") == 0)
 			{
-				m_characterPosition.x = static_cast<float>(atol(pszValue));
+				posStart.x = static_cast<float>(atol(pszValue));
 			}
 			else if (_strcmpi(pszAttribName, "y") == 0)
 			{
-				m_characterPosition.y = static_cast<float>(atol(pszValue));
+				posStart.y = static_cast<float>(atol(pszValue));
 			}
 		}
+
+		m_characterModel.m_pos = posStart;
 	}
 	if (_strcmpi(reinterpret_cast<const char*>(pszName), "cell") == 0)
 	{
@@ -640,73 +762,21 @@ void World::__ParseMapStartElement(const u8* pszName, const u8** ppAttribs)
 					std::map<u32, RenderModel*>::iterator it = m_mapModels.find(modelID);
 					if (it != m_mapModels.end())
 					{
+						RenderModel* pModel = it->second;
 						const std::vector<RenderModel_Mesh>& meshes = it->second->GetMeshes();
 						if (!meshes.empty())
 						{
 							const RenderModel_Mesh& mesh = meshes.front();
 
-							model.m_volume.m_center = Vector3((mesh.m_max.x + mesh.m_min.x) / 2.f, (mesh.m_max.y + mesh.m_min.y) / 2.f, (mesh.m_max.z + mesh.m_min.z) / 2.f);
-							model.m_volume.m_coords[0] = Vector3(mesh.m_min.x, mesh.m_min.y, mesh.m_min.z);
-							model.m_volume.m_coords[1] = Vector3(mesh.m_max.x, mesh.m_min.y, mesh.m_min.z);
-							model.m_volume.m_coords[2] = Vector3(mesh.m_max.x, mesh.m_max.y, mesh.m_min.z);
-							model.m_volume.m_coords[3] = Vector3(mesh.m_min.x, mesh.m_max.y, mesh.m_min.z);
-							model.m_volume.m_coords[4] = Vector3(mesh.m_min.x, mesh.m_min.y, mesh.m_max.z);
-							model.m_volume.m_coords[5] = Vector3(mesh.m_max.x, mesh.m_min.y, mesh.m_max.z);
-							model.m_volume.m_coords[6] = Vector3(mesh.m_max.x, mesh.m_max.y, mesh.m_max.z);
-							model.m_volume.m_coords[7] = Vector3(mesh.m_min.x, mesh.m_max.y, mesh.m_max.z);
-
-							// center it, still in directX coords.
-							Matrix4 matrixCenter;
-							matrixCenter.SetTranslation(Vector3(0.f - model.m_volume.m_center.x, 0.f - mesh.m_min.y, 0.f - model.m_volume.m_center.z));
-
-							// scale the model so <x> is one meter.
-							const f32 scale = 1.0f / mesh.m_size.x;
-							Matrix4 matrixScale;
-							matrixScale.SetScale(Vector3(scale, scale, scale));
-
-							// translate from directX to world coordinate system.
-							Matrix4 matrixCoordsToWorld;
-							matrixCoordsToWorld.SetIdentity();
-							matrixCoordsToWorld.m[1][1] = 0.0f;
-							matrixCoordsToWorld.m[2][1] = -1.0f;
-							matrixCoordsToWorld.m[2][2] = 0.0f;
-							matrixCoordsToWorld.m[1][2] = 1.0f;
-
-							// rotate it.
-							Matrix4 matrixRotate;
-							matrixRotate.SetRotate(Vector3(0.f, 0.f, (DirectX::XM_PI * rotation) / 180.f));
-
-							// position it.
-							Matrix4 matrixPosition;
-							matrixPosition.SetTranslation(Vector3(static_cast<f32>(pos.x) + offset.x, static_cast<f32>(pos.y) + offset.y, 0.f));
-
-							// compute the overall transform.
-							Matrix4 worldTransform = matrixPosition;
-							worldTransform = Matrix4::MultiplyAB(worldTransform, matrixRotate);
-							worldTransform = Matrix4::MultiplyAB(worldTransform, matrixCoordsToWorld);
-							worldTransform = Matrix4::MultiplyAB(worldTransform, matrixScale);
-							worldTransform = Matrix4::MultiplyAB(worldTransform, matrixCenter);
-
-							// test.
-							const Vector3 test_in(2.f, 0.5f, -.25f);
-
-							const Vector3 test_out = Matrix4::MultiplyVector(test_in, worldTransform);
-
-							const Vector3 test1 = Matrix4::MultiplyVector(test_in, matrixCenter);
-							const Vector3 test2 = Matrix4::MultiplyVector(test1, matrixScale);
-							const Vector3 test3 = Matrix4::MultiplyVector(test2, matrixCoordsToWorld);
-							const Vector3 test4 = Matrix4::MultiplyVector(test3, matrixRotate);
-							const Vector3 test5 = Matrix4::MultiplyVector(test4, matrixPosition);
-
 							model.m_modelID = modelID;
-							model.m_pModel = it->second;
-							model.m_transform = worldTransform;
+							model.m_pos = Vector3(static_cast<f32>(pos.x) + offset.x, static_cast<f32>(pos.y) + offset.y, 0.f);
+							model.m_scale = 1.0f / mesh.m_size.x;
+							model.m_rotation = rotation;
+							model.m_pModel = pModel;
 
-							model.m_volume.m_center = Matrix4::MultiplyVector(model.m_volume.m_center, worldTransform);
-							for (u32 i = 0; i < ARRAYSIZE(model.m_volume.m_coords); ++i)
-							{
-								model.m_volume.m_coords[i] = Matrix4::MultiplyVector(model.m_volume.m_coords[i], worldTransform);
-							}
+							__ComputeModelWorldLocalTransform(model);
+							__ComputeModelWorldTransformRender(model, &(model.m_worldTransformRender));
+							__ComputeCharacterModelBox(model, &(model.m_bounds));
 						}
 					}
 				}

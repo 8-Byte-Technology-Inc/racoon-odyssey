@@ -77,8 +77,12 @@ struct Vector3
 	{
 	}
 	bool operator ==(const Vector3& rhs) const { return x == rhs.x && y == rhs.y && z == rhs.z; }
-	f32 Mag() const { return static_cast<f32>(sqrt(x * x + y * y + z * z)); }
+	f32 MagSq() const { return x * x + y * y + z * z; }
+	f32 Mag() const { return static_cast<f32>(sqrt(MagSq())); }
 	static f32 Dot(const Vector3& a, const Vector3& b) { return (a.x * b.x) + (a.y * b.y) + (a.z * b.z); }
+	static Vector3 Cross(const Vector3& a, const Vector3& b);
+	static Vector3 ComputeNormal(const Vector3& o, const Vector3& p1, const Vector3& p2);
+	static Vector3 Normalize(const Vector3& v) { const f32 m = v.Mag();  return Vector3(v.x / m, v.y / m, v.z / m); }
 
 	float x;
 	float y;
