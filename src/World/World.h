@@ -42,7 +42,6 @@ struct MapModel
 		, m_rotation(0.f)
 		, m_scale(0.f)
 		, m_worldLocalTransform()
-		, m_worldTransformRender()
 	{
 	}
 
@@ -52,7 +51,6 @@ struct MapModel
 	f32								m_rotation;
 	f32								m_scale;
 	Matrix4							m_worldLocalTransform;
-	Matrix4							m_worldTransformRender;
 	MapModelBounds					m_bounds;
 };
 
@@ -73,8 +71,6 @@ public:
 
 	void LoadMap(const char* pszMapPath);
 	void LoadCharacter(const char* pszCharacterModelPath, const char* pszModelName);
-
-	const Vector3& GetCharacterPosition() const { return m_characterModel.m_pos; }
 
 	void Update(s32 frameCount);
 	void Render(RenderMain* pRenderer);

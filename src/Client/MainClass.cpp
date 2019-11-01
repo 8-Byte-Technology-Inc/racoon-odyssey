@@ -264,23 +264,6 @@ void MainClass::__SetRenderCamera()
 	// view transform; camera position around model.
 	Matrix4 viewMatrix;
 	{
-		const Vector3& characterPos = m_pWorld->GetCharacterPosition(); // meters.
-
-		// align character position to screen pixels.
-		const f32 pixelsPerMeter = m_pRenderer->GetRenderDPI() * 2.f;
-
-		Vector3 vectorAlign;
-		vectorAlign.x = 1.0f / pixelsPerMeter;
-		vectorAlign.y = (1.0f / pixelsPerMeter) / sin(DirectX::XM_PI / 8.f);
-
-		Vector3 characterPosAligned;
-		characterPosAligned.x = static_cast<f32>(static_cast<s64>(characterPos.x / vectorAlign.x)) * vectorAlign.x;
-		characterPosAligned.y = static_cast<f32>(static_cast<s64>(characterPos.y / vectorAlign.y)) * vectorAlign.y;
-		characterPosAligned.z = characterPos.z;
-
-		Matrix4 viewPosition;
-		viewPosition.SetTranslation(Vector3(0.f - characterPosAligned.x, 0.f - characterPosAligned.y, 0.f));
-
 		Matrix4 matrixRotateX;
 		matrixRotateX.SetRotateX(-DirectX::XM_PI / 8.f);
 
@@ -289,7 +272,6 @@ void MainClass::__SetRenderCamera()
 
 		viewMatrix = matrixRotateZ;
 		viewMatrix = Matrix4::MultiplyAB(viewMatrix, matrixRotateX);
-		viewMatrix = Matrix4::MultiplyAB(viewMatrix, viewPosition);
 
 		m_pRenderer->SetViewMatrix(viewMatrix);
 	}
@@ -411,22 +393,27 @@ LRESULT CALLBACK MainClass::__WindowProc(
 	case WM_KEYDOWN:
 		if ((wParam == 'W') || (wParam == VK_UP))
 		{
-			TB8::EventMessage* event = TB8::EventMessage_MoveStart::Alloc(+0, -1);
+			TB8::EventMessage* event = TB8::EventMessage_MoveStart::Alloc(+0, -1, +0);
 			m_eventQueue->QueueMessage(&event);
 		}
 		else if ((wParam == 'A') || (wParam == VK_LEFT))
 		{
-			TB8::EventMessage* event = TB8::EventMessage_MoveStart::Alloc(-1, +0);
+			TB8::EventMessage* event = TB8::EventMessage_MoveStart::Alloc(-1, +0, +0);
 			m_eventQueue->QueueMessage(&event);
 		}
 		else if ((wParam == 'S') || (wParam == VK_DOWN))
 		{
-			TB8::EventMessage* event = TB8::EventMessage_MoveStart::Alloc(+0, +1);
+			TB8::EventMessage* event = TB8::EventMessage_MoveStart::Alloc(+0, +1, +0);
 			m_eventQueue->QueueMessage(&event);
 		}
 		else if ((wParam == 'D') || (wParam == VK_RIGHT))
 		{
-			TB8::EventMessage* event = TB8::EventMessage_MoveStart::Alloc(+1, +0);
+			TB8::EventMessage* event = TB8::EventMessage_MoveStart::Alloc(+1, +0, +0);
+			m_eventQueue->QueueMessage(&event);
+		}
+		else if (wParam == VK_SPACE)
+		{
+			TB8::EventMessage* event = TB8::EventMessage_MoveStart::Alloc(+0, +0, +1);
 			m_eventQueue->QueueMessage(&event);
 		}
 
@@ -435,22 +422,27 @@ LRESULT CALLBACK MainClass::__WindowProc(
 	case WM_KEYUP:
 		if ((wParam == 'W') || (wParam == VK_UP))
 		{
-			TB8::EventMessage* event = TB8::EventMessage_MoveEnd::Alloc(+0, -1);
+			TB8::EventMessage* event = TB8::EventMessage_MoveEnd::Alloc(+0, -1, +0);
 			m_eventQueue->QueueMessage(&event);
 		}
 		else if ((wParam == 'A') || (wParam == VK_LEFT))
 		{
-			TB8::EventMessage* event = TB8::EventMessage_MoveEnd::Alloc(-1, +0);
+			TB8::EventMessage* event = TB8::EventMessage_MoveEnd::Alloc(-1, +0, +0);
 			m_eventQueue->QueueMessage(&event);
 		}
 		else if ((wParam == 'S') || (wParam == VK_DOWN))
 		{
-			TB8::EventMessage* event = TB8::EventMessage_MoveEnd::Alloc(+0, +1);
+			TB8::EventMessage* event = TB8::EventMessage_MoveEnd::Alloc(+0, +1, +0);
 			m_eventQueue->QueueMessage(&event);
 		}
 		else if ((wParam == 'D') || (wParam == VK_RIGHT))
 		{
-			TB8::EventMessage* event = TB8::EventMessage_MoveEnd::Alloc(+1, +0);
+			TB8::EventMessage* event = TB8::EventMessage_MoveEnd::Alloc(+1, +0, +0);
+			m_eventQueue->QueueMessage(&event);
+		}
+		else if (wParam == VK_SPACE)
+		{
+			TB8::EventMessage* event = TB8::EventMessage_MoveStart::Alloc(+0, +0, -1);
 			m_eventQueue->QueueMessage(&event);
 		}
 		else if (wParam == 'E')

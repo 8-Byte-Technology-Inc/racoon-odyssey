@@ -57,10 +57,10 @@ RenderModel::~RenderModel()
 	return obj;
 }
 
-/* static */ RenderModel* RenderModel::AllocSquareFromTexture(RenderMain* pRenderer, const Vector2& modelSize, const char* pszPath)
+/* static */ RenderModel* RenderModel::AllocSquareFromTexture(RenderMain* pRenderer, const Vector3& v0, const Vector3& v1, const char* pszTexturePath)
 {
 	RenderModel* obj = TB8_NEW(RenderModel)(pRenderer);
-	obj->__InitializeSquareFromTexture(pRenderer, modelSize, pszPath);
+	obj->__InitializeSquareFromTexture(pRenderer, v0, v1, pszTexturePath);
 	return obj;
 }
 
@@ -452,7 +452,7 @@ void RenderModel::__Initialize(RenderMain* pRenderer, s32 vertexCount, RenderMod
 	assert(!"not yet implemented !");
 }
 
-void RenderModel::__InitializeSquareFromTexture(RenderMain* pRenderer, const Vector2& modelSize, const char* pszPath)
+void RenderModel::__InitializeSquareFromTexture(RenderMain* pRenderer, const Vector3& v0, const Vector3& v1, const char* pszTexturePath)
 {
 	HRESULT hr = S_OK;
 
@@ -461,7 +461,10 @@ void RenderModel::__InitializeSquareFromTexture(RenderMain* pRenderer, const Vec
 	m_pShader->AddRef();
 
 	// load texture.
-	m_pTexture = RenderTexture::Alloc(pRenderer, pszPath);
+	m_pTexture = RenderTexture::Alloc(pRenderer, pszTexturePath);
+
+	// compute normal.
+	const Vector3 normal = Vector3::ComputeNormal(Vector3(0.f, 0.f, 0.f), v0, v1);
 
 	// construct verticies & indicies.
 	std::vector<RenderShader_Vertex_Generic> verticies;
@@ -476,9 +479,9 @@ void RenderModel::__InitializeSquareFromTexture(RenderMain* pRenderer, const Vec
 	vertex.position.x = 0.f;
 	vertex.position.y = 0.f;
 	vertex.position.z = 0.f;
-	vertex.normal.x = 0.f;
-	vertex.normal.y = 0.f;
-	vertex.normal.z = 1.f;
+	vertex.normal.x = normal.x;
+	vertex.normal.y = normal.y;
+	vertex.normal.z = normal.z;
 	vertex.color.x = targetTexPos.x;
 	vertex.color.y = targetTexPos.y;
 	vertex.color.z = 0.f;
@@ -488,21 +491,27 @@ void RenderModel::__InitializeSquareFromTexture(RenderMain* pRenderer, const Vec
 
 	// v1
 	m_pTexture->MapUV(0, Vector2(1.f, 0.f), &targetTexPos);
-	vertex.position.x = modelSize.x;
+	vertex.position.x = v0.x;
+	vertex.position.y = v0.y;
+	vertex.position.z = v0.z;
 	vertex.color.x = targetTexPos.x;
 	vertex.color.y = targetTexPos.y;
 	verticies.push_back(vertex);
 
 	// v2
 	m_pTexture->MapUV(0, Vector2(1.f, 1.f), &targetTexPos);
-	vertex.position.y = modelSize.y;
+	vertex.position.x = v0.x + v1.x;
+	vertex.position.y = v0.y + v1.y;
+	vertex.position.z = v0.z + v1.z;
 	vertex.color.x = targetTexPos.x;
 	vertex.color.y = targetTexPos.y;
 	verticies.push_back(vertex);
 
 	// v3
 	m_pTexture->MapUV(0, Vector2(0.f, 1.f), &targetTexPos);
-	vertex.position.x = 0.f;
+	vertex.position.x = v1.x;
+	vertex.position.y = v1.y;
+	vertex.position.z = v1.z;
 	vertex.color.x = targetTexPos.x;
 	vertex.color.y = targetTexPos.y;
 	verticies.push_back(vertex);
@@ -514,6 +523,17 @@ void RenderModel::__InitializeSquareFromTexture(RenderMain* pRenderer, const Vec
 	indicies.push_back(0);
 	indicies.push_back(2);
 	indicies.push_back(3);
+
+	// build mesh desc.
+	m_meshes.emplace_back();
+	RenderModel_Mesh& mesh = m_meshes.back();
+	mesh.m_min.x = std::min<f32>(std::min<f32>(verticies[0].position.x, verticies[1].position.x), std::min<f32>(verticies[2].position.x, verticies[3].position.x));
+	mesh.m_min.y = std::min<f32>(std::min<f32>(verticies[0].position.y, verticies[1].position.y), std::min<f32>(verticies[2].position.y, verticies[3].position.y));
+	mesh.m_min.z = std::min<f32>(std::min<f32>(verticies[0].position.z, verticies[1].position.z), std::min<f32>(verticies[2].position.z, verticies[3].position.z));
+
+	mesh.m_max.x = std::max<f32>(std::max<f32>(verticies[0].position.x, verticies[1].position.x), std::max<f32>(verticies[2].position.x, verticies[3].position.x));
+	mesh.m_max.y = std::max<f32>(std::max<f32>(verticies[0].position.y, verticies[1].position.y), std::max<f32>(verticies[2].position.y, verticies[3].position.y));
+	mesh.m_max.z = std::max<f32>(std::max<f32>(verticies[0].position.z, verticies[1].position.z), std::max<f32>(verticies[2].position.z, verticies[3].position.z));
 
 	// build verticies.
 	m_vertexCount = static_cast<s32>(verticies.size());

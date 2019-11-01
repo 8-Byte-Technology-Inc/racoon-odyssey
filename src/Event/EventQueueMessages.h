@@ -38,26 +38,28 @@ enum EventMessageID : u32
 class EventMessage_MoveStart : public EventMessage
 {
 public:
-	EventMessage_MoveStart(s32 dx, s32 dy);
+	EventMessage_MoveStart(s32 dx, s32 dy, s32 dz);
 
-	static EventMessage_MoveStart* Alloc(s32 dx, s32 dy);
+	static EventMessage_MoveStart* Alloc(s32 dx, s32 dy, s32 dz);
 	virtual void __Free() override;
 
 	s32 m_dx;
 	s32 m_dy;
+	s32 m_dz;
 };
 
 // EventMessage_EndMove
 class EventMessage_MoveEnd : public EventMessage
 {
 public:
-	EventMessage_MoveEnd(s32 dx, s32 dy);
+	EventMessage_MoveEnd(s32 dx, s32 dy, s32 dz);
 
-	static EventMessage_MoveEnd* Alloc(s32 dx, s32 dy);
+	static EventMessage_MoveEnd* Alloc(s32 dx, s32 dy, s32 dz);
 	virtual void __Free() override;
 
 	s32 m_dx;
 	s32 m_dy;
+	s32 m_dz;
 };
 
 // EventMessage_ResizeWindow

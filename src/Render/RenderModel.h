@@ -76,7 +76,7 @@ public:
 	~RenderModel();
 
 	static RenderModel* Alloc(RenderMain* pRenderer, s32 vertexCount, RenderModel_VertexPositionTexture* verticies, s32 indexCount, u16* indicies, const Vector4& color);
-	static RenderModel* AllocSquareFromTexture(RenderMain* pRenderer, const Vector2& modelSize, const char* pszPath);
+	static RenderModel* AllocSquareFromTexture(RenderMain* pRenderer, const Vector3& v0, const Vector3& v1, const char* pszTexturePath);
 	static RenderModel* AllocFromDAE(RenderMain* pRenderer, const char* path, const char* file, const char* modelName);
 
 	void SetPosition(const Vector3& position);
@@ -98,7 +98,7 @@ public:
 
 private:
 	void __Initialize(RenderMain* pRenderer, s32 vertexCount, RenderModel_VertexPositionTexture* verticies, s32 indexCount, u16* indicies, const Vector4& color);
-	void __InitializeSquareFromTexture(RenderMain* pRenderer, const Vector2& modelSize, const char* pszPath);
+	void __InitializeSquareFromTexture(RenderMain* pRenderer, const Vector3& v0, const Vector3& v1, const char* pszTexturePath);
 	void __InitializeFromDAE(RenderMain* pRenderer, const char* path, const char* file, const char* modelName);
 
 	virtual void __Free() override;

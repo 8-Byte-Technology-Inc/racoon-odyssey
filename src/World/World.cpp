@@ -77,7 +77,6 @@ void World::LoadCharacter(const char* pszCharacterModelPath, const char* pszMode
 	m_characterModel.m_scale = .75f / mesh.m_size.y;
 
 	__ComputeModelWorldLocalTransform(m_characterModel);
-	__ComputeModelWorldTransformRender(m_characterModel, &(m_characterModel.m_worldTransformRender));
 	__ComputeCharacterModelSphere(m_characterModel, &(m_characterModel.m_bounds));
 }
 
@@ -87,9 +86,19 @@ void World::Update(s32 frameCount)
 	const f32 forceFactor = 20.f;
 	const f32 forceDampen = 10.0f;
 	const f32 windResistFactor = 0.25f;
-	const f32 gravityFactor = 5.0f;
+	const f32 gravityFactor = 10.0f;
 	const f32 elapsedTime = static_cast<f32>(frameCount) / 60.f;
 	const f32 velocityMax = 5.f; // m/s.
+
+	// process jumping.
+	if (!is_approx_zero(m_characterForce.z))
+	{
+		if (is_approx_zero(m_characterModel.m_pos.z))
+		{
+			m_characterVelocity.z = +4.f;
+		}
+		m_characterForce.z = 0.f;
+	}
 
 	const Vector3 forceChar = m_characterForce * forceFactor;
 
@@ -164,7 +173,6 @@ void World::Update(s32 frameCount)
 	m_characterModel.m_pos = pos;
 	m_characterModel.m_rotation = facing;
 	m_characterVelocity = vel;
-	__ComputeModelWorldTransformRender(m_characterModel, &(m_characterModel.m_worldTransformRender));
 	__ComputeCharacterModelSphere(m_characterModel, &(m_characterModel.m_bounds));
 }
 
@@ -192,7 +200,9 @@ void World::Render(RenderMain* pRenderer)
 				MapModel& model = cell.m_tile;
 				if (model.m_pModel)
 				{
-					model.m_pModel->SetWorldTransform(model.m_worldTransformRender);
+					Matrix4 worldTransform;
+					__ComputeModelWorldTransformRender(model, &worldTransform);
+					model.m_pModel->SetWorldTransform(worldTransform);
 					model.m_pModel->Render(pRenderer);
 				}
 			}
@@ -202,7 +212,9 @@ void World::Render(RenderMain* pRenderer)
 				MapModel& model = cell.m_wall[i];
 				if (model.m_pModel)
 				{
-					model.m_pModel->SetWorldTransform(model.m_worldTransformRender);
+					Matrix4 worldTransform;
+					__ComputeModelWorldTransformRender(model, &worldTransform);
+					model.m_pModel->SetWorldTransform(worldTransform);
 					model.m_pModel->Render(pRenderer);
 				}
 			}
@@ -211,7 +223,9 @@ void World::Render(RenderMain* pRenderer)
 
 	// draw the character.
 	{
-		m_characterModel.m_pModel->SetWorldTransform(m_characterModel.m_worldTransformRender);
+		Matrix4 worldTransform;
+		__ComputeModelWorldTransformRender(m_characterModel, &worldTransform);
+		m_characterModel.m_pModel->SetWorldTransform(worldTransform);
 		m_characterModel.m_pModel->Render(pRenderer);
 	}
 }
@@ -248,6 +262,10 @@ void World::__EventHandler(EventMessage* pEvent)
 		{
 			m_characterForce.y = static_cast<f32>(pEventMoveStart->m_dy);
 		}
+		if (pEventMoveStart->m_dz != 0)
+		{
+			m_characterForce.z = static_cast<f32>(pEventMoveStart->m_dz);
+		}
 		break;
 	}
 	case EventMessageID_MoveEnd:
@@ -260,6 +278,10 @@ void World::__EventHandler(EventMessage* pEvent)
 		if (pEventMoveEnd->m_dy != 0)
 		{
 			m_characterForce.y = 0.f;
+		}
+		if (pEventMoveEnd->m_dz != 0)
+		{
+			m_characterForce.z = 0.f;
 		}
 		break;
 	}
@@ -276,11 +298,12 @@ Vector3 World::__AlignPosition(const Vector3& position)
 	Vector3 vectorAlign;
 	vectorAlign.x = 1.0f / pixelsPerMeter;
 	vectorAlign.y = (1.0f / pixelsPerMeter) / sin(DirectX::XM_PI / 8.f);
+	vectorAlign.z = (1.0f / pixelsPerMeter) / cos(DirectX::XM_PI / 8.f);
 
 	Vector3 positionAligned;
-	positionAligned.x = static_cast<f32>(static_cast<s64>(position.x / vectorAlign.x))* vectorAlign.x;
-	positionAligned.y = static_cast<f32>(static_cast<s64>(position.y / vectorAlign.y))* vectorAlign.y;
-	positionAligned.z = position.z;
+	positionAligned.x = (static_cast<f32>(static_cast<s64>(position.x / vectorAlign.x))) * vectorAlign.x;
+	positionAligned.y = (static_cast<f32>(static_cast<s64>(position.y / vectorAlign.y))) * vectorAlign.y;
+	positionAligned.z = (static_cast<f32>(static_cast<s64>(position.z / vectorAlign.z))) * vectorAlign.z;
 
 	return positionAligned;
 }
@@ -295,9 +318,20 @@ void World::__ComputeModelWorldLocalTransform(MapModel& model)
 	Matrix4 matrixCenter;
 	matrixCenter.SetTranslation(Vector3(0.f - ((mesh.m_max.x + mesh.m_min.x) / 2.f), 0.f - mesh.m_min.y, 0.f - ((mesh.m_max.z + mesh.m_min.z) / 2.f)));
 
+#if 0
+	// align size of the model.
+	const Vector3 sizeBase(mesh.m_max.x - mesh.m_min.x, mesh.m_max.y - mesh.m_min.y, mesh.m_max.z - mesh.m_min.z);
+	const Vector3 sizeScaled = sizeBase * model.m_scale;
+	const Vector3 sizeAligned = __AlignPosition(sizeScaled);
+
 	// scale it.
+	const Vector3 scale(is_approx_zero(sizeBase.x) ? 1.f : (sizeAligned.x / sizeBase.x), 
+					is_approx_zero(sizeBase.y) ? 1.f : (sizeAligned.y / sizeBase.y), 
+					is_approx_zero(sizeBase.z) ? 1.f : (sizeAligned.z / sizeBase.z));
+#endif
+	const Vector3 scale(model.m_scale, model.m_scale, model.m_scale);
 	Matrix4 matrixScale;
-	matrixScale.SetScale(Vector3(model.m_scale, model.m_scale, model.m_scale));
+	matrixScale.SetScale(scale);
 
 	// translate from directX to world coordinate system.
 	Matrix4 matrixCoordsToWorld;
@@ -319,8 +353,9 @@ void World::__ComputeModelWorldTransformRender(MapModel& model, Matrix4* pWorldT
 	matrixRotate.SetRotate(Vector3(0.f, 0.f, DirectX::XM_PI * (model.m_rotation) / 180.f));
 
 	// position it.
+	const Vector3 renderPos = __AlignPosition(model.m_pos - m_characterModel.m_pos);
 	Matrix4 matrixPosition;
-	matrixPosition.SetTranslation(__AlignPosition(model.m_pos));
+	matrixPosition.SetTranslation(renderPos);
 
 	// compute the overall transform.
 	*pWorldTransform = matrixPosition;
@@ -371,24 +406,11 @@ void World::__ComputeCharacterModelSphere(MapModel& model, MapModelBounds* pBoun
 	assert(!meshes.empty());
 	const RenderModel_Mesh& mesh = meshes.front();
 
-	// rotate it.
-	Matrix4 matrixRotate;
-	matrixRotate.SetRotate(Vector3(0.f, 0.f, DirectX::XM_PI * (model.m_rotation) / 180.f));
-
-	// position it.
-	Matrix4 matrixPosition;
-	matrixPosition.SetTranslation(model.m_pos);
-
-	// compute the overall transform.
-	Matrix4 worldTransform = matrixPosition;
-	worldTransform = Matrix4::MultiplyAB(worldTransform, matrixRotate);
-	worldTransform = Matrix4::MultiplyAB(worldTransform, model.m_worldLocalTransform);
-
 	const Vector3 vCenter((mesh.m_max.x + mesh.m_min.x) / 2.f, (mesh.m_max.y + mesh.m_min.y) / 2.f, (mesh.m_max.z + mesh.m_min.z) / 2.f);
 	const f32 radius = std::max<f32>(std::max<f32>(mesh.m_max.x - mesh.m_min.x, mesh.m_max.y - mesh.m_min.y), mesh.m_max.z - mesh.m_min.z) / 2.f;
 
 	pBounds->m_type = MapModelBounds_Type_Sphere;
-	pBounds->m_center = Matrix4::MultiplyVector(vCenter, worldTransform);
+	pBounds->m_center = Matrix4::MultiplyVector(vCenter, model.m_worldLocalTransform) + model.m_pos;
 	pBounds->m_radius = radius * model.m_scale;
 }
 
@@ -623,7 +645,7 @@ void World::__ParseMapStartElement(const u8* pszName, const u8** ppAttribs)
 			{
 				std::string texturePath = m_mapPath;
 				TB8::File::AppendToPath(texturePath, pszPath);
-				pModel = RenderModel::AllocSquareFromTexture(__GetRenderer(), Vector2(1.f, 1.f), texturePath.c_str());
+				pModel = RenderModel::AllocSquareFromTexture(__GetRenderer(), Vector3(0.f, 0.f, 1.f), Vector3(1.f, 0.f, 0.f), texturePath.c_str());
 			}
 			else if ((_strcmpi(pszType, "dae") == 0) && pszModel)
 			{
@@ -669,17 +691,15 @@ void World::__ParseMapStartElement(const u8* pszName, const u8** ppAttribs)
 				MapCell& cell = __GetCell(pos);
 
 				MapModel& model = cell.m_tile;
-				model.m_modelID = defaultTile;
-				std::map<u32, RenderModel*>::iterator itModel = m_mapModels.find(model.m_modelID);
+				std::map<u32, RenderModel*>::iterator itModel = m_mapModels.find(defaultTile);
 				if (itModel != m_mapModels.end())
 				{
+					model.m_modelID = defaultTile;
 					model.m_pModel = itModel->second;
-
-					// position it.
-					Matrix4 matrixPosition;
-					matrixPosition.SetTranslation(Vector3(static_cast<f32>(pos.x), static_cast<f32>(pos.y), 0.f));
-
-					model.m_worldTransformRender = matrixPosition;
+					model.m_scale = 1.f;
+					model.m_rotation = 0.f;
+					model.m_pos = Vector3(static_cast<f32>(pos.x) + 0.5f, static_cast<f32>(pos.y) + 0.5f, 0.f);
+					__ComputeModelWorldLocalTransform(model);
 				}
 			}
 		}
@@ -775,7 +795,6 @@ void World::__ParseMapStartElement(const u8* pszName, const u8** ppAttribs)
 							model.m_pModel = pModel;
 
 							__ComputeModelWorldLocalTransform(model);
-							__ComputeModelWorldTransformRender(model, &(model.m_worldTransformRender));
 							__ComputeCharacterModelBox(model, &(model.m_bounds));
 						}
 					}

@@ -9,16 +9,17 @@ namespace TB8
 {
 
 // EventMessage_MoveStart
-EventMessage_MoveStart::EventMessage_MoveStart(s32 dx, s32 dy)
+EventMessage_MoveStart::EventMessage_MoveStart(s32 dx, s32 dy, s32 dz)
 	: EventMessage(EventMessageID_MoveStart)
 	, m_dx(dx)
 	, m_dy(dy)
+	, m_dz(dz)
 {
 }
 
-EventMessage_MoveStart* EventMessage_MoveStart::Alloc(s32 dx, s32 dy)
+EventMessage_MoveStart* EventMessage_MoveStart::Alloc(s32 dx, s32 dy, s32 dz)
 {
-	EventMessage_MoveStart* obj = TB8_NEW(EventMessage_MoveStart)(dx, dy);
+	EventMessage_MoveStart* obj = TB8_NEW(EventMessage_MoveStart)(dx, dy, dz);
 	return obj;
 }
 
@@ -28,16 +29,17 @@ void EventMessage_MoveStart::__Free()
 }
 
 // EventMessage_EndMove
-EventMessage_MoveEnd::EventMessage_MoveEnd(s32 dx, s32 dy)
+EventMessage_MoveEnd::EventMessage_MoveEnd(s32 dx, s32 dy, s32 dz)
 	: EventMessage(EventMessageID_MoveEnd)
 	, m_dx(dx)
 	, m_dy(dy)
+	, m_dz(dz)
 {
 }
 
-EventMessage_MoveEnd* EventMessage_MoveEnd::Alloc(s32 dx, s32 dy)
+EventMessage_MoveEnd* EventMessage_MoveEnd::Alloc(s32 dx, s32 dy, s32 dz)
 {
-	EventMessage_MoveEnd* obj = TB8_NEW(EventMessage_MoveEnd)(dx, dy);
+	EventMessage_MoveEnd* obj = TB8_NEW(EventMessage_MoveEnd)(dx, dy, dz);
 	return obj;
 }
 
