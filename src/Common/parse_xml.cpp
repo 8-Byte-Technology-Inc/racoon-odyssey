@@ -156,7 +156,7 @@ XML_Parser_Result XML_Parser::Parse()
 			}
 			case XML_Parser_Context_Decl:
 			{
-				if ((*(data.m_pEnd - 0) == '>'))
+				if (*(data.m_pEnd - 0) == '>')
 				{
 					const u32 cb = m_posCursor - m_posStart;
 					__Consume(data, cb + 1);
@@ -170,7 +170,7 @@ XML_Parser_Result XML_Parser::Parse()
 			}
 			case XML_Parser_Context_Element:
 			{
-				if ((*(data.m_pEnd - 0) == '>'))
+				if (*(data.m_pEnd - 0) == '>')
 				{
 					if (!__ParseElement(data))
 						return XML_Parser_Result_Error;
