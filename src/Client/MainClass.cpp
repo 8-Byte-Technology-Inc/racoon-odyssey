@@ -207,7 +207,6 @@ void MainClass::__ProcessRenderFrame(s32 frameCount)
 	m_pClientGlobals->UpdateFrameCount(frameCount);
 
 	__ProcessInternal();
-	__SetRenderCamera();
 
 	m_pRenderer->UpdateRender(frameCount);
 	m_pWorld->Update(frameCount);
@@ -258,65 +257,6 @@ void MainClass::__UpdateModelPosition()
 	m_pModel->SetJointRotation(4, Vector3(DirectX::XM_PI * static_cast<f32>(rotation_legR) / 180.f, 0.f, 0.f));
 }
 #endif
-
-void MainClass::__SetRenderCamera()
-{
-	// view transform; camera position around model.
-	Matrix4 viewMatrix;
-	{
-		Matrix4 matrixRotateX;
-		matrixRotateX.SetRotateX(-DirectX::XM_PI / 8.f);
-
-		Matrix4 matrixRotateZ;
-		matrixRotateZ.SetRotateZ(DirectX::XM_PI / 8.f);
-
-		viewMatrix = matrixRotateZ;
-		viewMatrix = Matrix4::MultiplyAB(viewMatrix, matrixRotateX);
-
-		m_pRenderer->SetViewMatrix(viewMatrix);
-	}
-
-	// projection transform; world -> screen coordinates.
-	Matrix4 projectionMatrix;
-	{
-		const f32 zNear = 1024.f;
-		const f32 zFar = 5120.f;
-		const f32 zMid = (zNear + zFar) / 2.f;
-
-		// change coordinate system from world -> directx.
-		Matrix4 projectionCoords;
-		projectionCoords.SetIdentity();
-		projectionCoords.m[1][1] = 0.0f;
-		projectionCoords.m[1][2] = -1.0f;
-		projectionCoords.m[2][2] = 0.0f;
-		projectionCoords.m[2][1] = 1.0f;
-
-		// move 0.0 into the middle of z.
-		Matrix4 projectionMoveZ;
-		projectionMoveZ.SetTranslation(Vector3(0.f, 0.f, zMid - zNear));
-
-		// meters -> directx.
-		const Vector2& screenSizeWorld = m_pRenderer->GetRenderScreenSizeWorld();
-		f32 scaleX = 2.f / screenSizeWorld.x;
-		f32 scaleY = 2.f / screenSizeWorld.y;
-		f32 scaleZ = 1.f / (zFar - zNear);
-		Matrix4 projectionScale;
-		projectionScale.SetScale(Vector3(scaleX, scaleY, scaleZ));
-
-		projectionMatrix = projectionScale;
-		projectionMatrix = Matrix4::MultiplyAB(projectionMatrix, projectionMoveZ);
-		projectionMatrix = Matrix4::MultiplyAB(projectionMatrix, projectionCoords);
-
-		m_pRenderer->SetProjectionMatrix(projectionMatrix);
-	}
-
-	// light source
-	{
-		const Vector3 lightVectorWorld(+0.25f, +1.0f, -0.25f);
-
-		m_pRenderer->SetLightVector(lightVectorWorld);
-	}
-}
 
 void MainClass::__DispatchEventQueue()
 {
@@ -597,8 +537,8 @@ LRESULT CALLBACK MainClass::__WindowProc(
 	}
 	case WM_SIZE:
 	{
-		IVector2 clientSize(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
-		IVector2 snappedSize(((clientSize.x + 4) / 8) * 8, ((clientSize.y + 4) / 8) * 8);
+		IVector2 snappedSize(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+		m_pRenderer->AlignScreenSize(snappedSize);
 
 		RECT r;
 		r.left = 0;
@@ -645,7 +585,8 @@ LRESULT CALLBACK MainClass::__WindowProc(
 		ScreenToClient(hWnd, &LR);
 
 		IVector2 clientSize(screenRect->right - screenRect->left, screenRect->bottom - screenRect->top);
-		IVector2 snappedSize(((clientSize.x + 4) / 8) * 8, ((clientSize.y + 4) / 8) * 8);
+		IVector2 snappedSize = clientSize;
+		m_pRenderer->AlignScreenSize(snappedSize);
 
 		screenRect->right += snappedSize.x - clientSize.x;
 		screenRect->bottom += snappedSize.y -  clientSize.y;

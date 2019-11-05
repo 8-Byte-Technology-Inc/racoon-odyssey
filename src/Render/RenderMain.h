@@ -68,6 +68,9 @@ public:
 	const IVector2& GetRenderScreenSize() const { return m_dataRender.m_screenSizePixels; }
 	s32 GetRenderDPI() const { return m_dataRender.m_dpi; }
 	const Vector2& GetRenderScreenSizeWorld() const { return m_dataRender.m_screenSizeWorld; }
+	void AlignWorldPosition(Vector3& worldPos);
+	void AlignWorldSize(Vector3& worldSize);
+	void AlignScreenSize(IVector2& screenSize);
 
 	void DrawCursor();
 	bool IsCursorVisible() const;
@@ -82,6 +85,7 @@ private:
 	void __ReleaseBuffers();
 	void __ResizeBuffers();
 	void __SetScreenSizePixels(const IVector2& size, s32 dpi);
+	void __ConfigureTransforms();
 
 	void __EventHandler(EventMessage* message);
 	void __EventResizeWindow(class EventMessage_ResizeWindow* event);
@@ -114,6 +118,9 @@ private:
 	Matrix4						m_projectionMatrix;
 	Matrix4						m_viewMatrix;
 	Vector3						m_lightVector;
+
+	Matrix4						m_worldToScreen;
+	Matrix4						m_screenToWorld;
 
 	float						m_bgColor[4];
 

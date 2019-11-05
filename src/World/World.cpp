@@ -186,8 +186,11 @@ void World::Render(RenderMain* pRenderer)
 	IRect tiles;
 	tiles.left = static_cast<u32>((m_characterModel.m_pos.x - ((screenSizeWorld.x / 2.f) * 3.f) / TILES_PER_METER));
 	tiles.right = static_cast<u32>((m_characterModel.m_pos.x + ((screenSizeWorld.x / 2.f) * 3.f) / TILES_PER_METER)) + 1;
-	tiles.top = static_cast<u32>((m_characterModel.m_pos.y - ((screenSizeWorld.y / 2.f) * 3.f) / TILES_PER_METER));
-	tiles.bottom = static_cast<u32>((m_characterModel.m_pos.y + ((screenSizeWorld.y / 2.f) * 3.f) / TILES_PER_METER)) + 1;
+	tiles.top = static_cast<u32>((m_characterModel.m_pos.y - ((screenSizeWorld.y / 2.f) * 4.f) / TILES_PER_METER));
+	tiles.bottom = static_cast<u32>((m_characterModel.m_pos.y + ((screenSizeWorld.y / 2.f) * 4.f) / TILES_PER_METER)) + 1;
+
+	Vector3 screenWorldPos = m_characterModel.m_pos;
+	__GetRenderer()->AlignWorldPosition(screenWorldPos);
 
 	// draw the tiles & walls.
 	IVector2 cellPos;
@@ -201,7 +204,7 @@ void World::Render(RenderMain* pRenderer)
 				if (model.m_pModel)
 				{
 					Matrix4 worldTransform;
-					__ComputeModelWorldTransformRender(model, &worldTransform);
+					__ComputeModelWorldTransformRender(model, screenWorldPos, &worldTransform);
 					model.m_pModel->SetWorldTransform(worldTransform);
 					model.m_pModel->Render(pRenderer);
 				}
@@ -213,7 +216,7 @@ void World::Render(RenderMain* pRenderer)
 				if (model.m_pModel)
 				{
 					Matrix4 worldTransform;
-					__ComputeModelWorldTransformRender(model, &worldTransform);
+					__ComputeModelWorldTransformRender(model, screenWorldPos, &worldTransform);
 					model.m_pModel->SetWorldTransform(worldTransform);
 					model.m_pModel->Render(pRenderer);
 				}
@@ -224,7 +227,7 @@ void World::Render(RenderMain* pRenderer)
 	// draw the character.
 	{
 		Matrix4 worldTransform;
-		__ComputeModelWorldTransformRender(m_characterModel, &worldTransform);
+		__ComputeModelWorldTransformRender(m_characterModel, m_characterModel.m_pos, &worldTransform);
 		m_characterModel.m_pModel->SetWorldTransform(worldTransform);
 		m_characterModel.m_pModel->Render(pRenderer);
 	}
@@ -290,24 +293,6 @@ void World::__EventHandler(EventMessage* pEvent)
 	}
 }
 
-Vector3 World::__AlignPosition(const Vector3& position)
-{
-	// align character position to screen pixels.
-	const f32 pixelsPerMeter = __GetRenderer()->GetRenderDPI() * 2.f;
-
-	Vector3 vectorAlign;
-	vectorAlign.x = 1.0f / pixelsPerMeter;
-	vectorAlign.y = (1.0f / pixelsPerMeter) / sin(DirectX::XM_PI / 8.f);
-	vectorAlign.z = (1.0f / pixelsPerMeter) / cos(DirectX::XM_PI / 8.f);
-
-	Vector3 positionAligned;
-	positionAligned.x = (static_cast<f32>(static_cast<s64>(position.x / vectorAlign.x))) * vectorAlign.x;
-	positionAligned.y = (static_cast<f32>(static_cast<s64>(position.y / vectorAlign.y))) * vectorAlign.y;
-	positionAligned.z = (static_cast<f32>(static_cast<s64>(position.z / vectorAlign.z))) * vectorAlign.z;
-
-	return positionAligned;
-}
-
 void World::__ComputeModelWorldLocalTransform(MapModel& model)
 {
 	const std::vector<RenderModel_Mesh>& meshes = model.m_pModel->GetMeshes();
@@ -318,18 +303,16 @@ void World::__ComputeModelWorldLocalTransform(MapModel& model)
 	Matrix4 matrixCenter;
 	matrixCenter.SetTranslation(Vector3(0.f - ((mesh.m_max.x + mesh.m_min.x) / 2.f), 0.f - mesh.m_min.y, 0.f - ((mesh.m_max.z + mesh.m_min.z) / 2.f)));
 
-#if 0
 	// align size of the model.
 	const Vector3 sizeBase(mesh.m_max.x - mesh.m_min.x, mesh.m_max.y - mesh.m_min.y, mesh.m_max.z - mesh.m_min.z);
-	const Vector3 sizeScaled = sizeBase * model.m_scale;
-	const Vector3 sizeAligned = __AlignPosition(sizeScaled);
+	Vector3 sizeAligned = sizeBase * model.m_scale;
+	__GetRenderer()->AlignWorldSize(sizeAligned);
 
 	// scale it.
 	const Vector3 scale(is_approx_zero(sizeBase.x) ? 1.f : (sizeAligned.x / sizeBase.x), 
 					is_approx_zero(sizeBase.y) ? 1.f : (sizeAligned.y / sizeBase.y), 
 					is_approx_zero(sizeBase.z) ? 1.f : (sizeAligned.z / sizeBase.z));
-#endif
-	const Vector3 scale(model.m_scale, model.m_scale, model.m_scale);
+
 	Matrix4 matrixScale;
 	matrixScale.SetScale(scale);
 
@@ -346,14 +329,15 @@ void World::__ComputeModelWorldLocalTransform(MapModel& model)
 	model.m_worldLocalTransform = Matrix4::MultiplyAB(model.m_worldLocalTransform, matrixCenter);
 }
 
-void World::__ComputeModelWorldTransformRender(MapModel& model, Matrix4* pWorldTransform)
+void World::__ComputeModelWorldTransformRender(MapModel& model, const Vector3& screenWorldPos, Matrix4* pWorldTransform)
 {
 	// rotate it.
 	Matrix4 matrixRotate;
 	matrixRotate.SetRotate(Vector3(0.f, 0.f, DirectX::XM_PI * (model.m_rotation) / 180.f));
 
 	// position it.
-	const Vector3 renderPos = __AlignPosition(model.m_pos - m_characterModel.m_pos);
+	Vector3 renderPos = model.m_pos - screenWorldPos;
+
 	Matrix4 matrixPosition;
 	matrixPosition.SetTranslation(renderPos);
 
@@ -698,7 +682,7 @@ void World::__ParseMapStartElement(const u8* pszName, const u8** ppAttribs)
 					model.m_pModel = itModel->second;
 					model.m_scale = 1.f;
 					model.m_rotation = 0.f;
-					model.m_pos = Vector3(static_cast<f32>(pos.x) + 0.5f, static_cast<f32>(pos.y) + 0.5f, 0.f);
+					model.m_pos = Vector3(static_cast<f32>(pos.x), static_cast<f32>(pos.y), 0.f);
 					__ComputeModelWorldLocalTransform(model);
 				}
 			}

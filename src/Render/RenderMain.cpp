@@ -314,6 +314,136 @@ void RenderMain::__Initialize()
 	// create shaders.
 	m_shaders.resize(1);
 	m_shaders[0] = RenderShader::Alloc(this, RenderShaderID_Generic, __GetPathBinary().c_str(), "GenericVertexShader.cso", "GenericPixelShader.cso");
+
+	// configure transforms.
+	__ConfigureTransforms();
+}
+
+void RenderMain::__ConfigureTransforms()
+{
+	// view transform; camera position around model.
+	Matrix4 viewMatrix;
+	{
+		Matrix4 matrixRotateX;
+		matrixRotateX.SetRotateX(-DirectX::XM_PI / 8.f);
+
+		Matrix4 matrixRotateZ;
+		matrixRotateZ.SetRotateZ(DirectX::XM_PI / 8.f);
+
+		viewMatrix = matrixRotateZ;
+		viewMatrix = Matrix4::MultiplyAB(viewMatrix, matrixRotateX);
+
+		SetViewMatrix(viewMatrix);
+	}
+
+	// change coordinate system from world -> directx.
+	Matrix4 projectionCoords;
+	{
+		projectionCoords.SetIdentity();
+		projectionCoords.m[1][1] = 0.0f;
+		projectionCoords.m[1][2] = -1.0f;
+		projectionCoords.m[2][2] = 0.0f;
+		projectionCoords.m[2][1] = 1.0f;
+	}
+
+	// projection transform; world -> screen coordinates.
+	Matrix4 projectionMatrix;
+	{
+		const f32 zNear = 1024.f;
+		const f32 zFar = 5120.f;
+		const f32 zMid = (zNear + zFar) / 2.f;
+
+		// move 0.0 into the middle of z.
+		Matrix4 projectionMoveZ;
+		projectionMoveZ.SetTranslation(Vector3(0.f, 0.f, zMid - zNear));
+
+		// meters -> directx.
+		f32 scaleX = static_cast<f32>(m_dataRender.m_dpi * 4) / static_cast<f32>(m_dataRender.m_screenSizePixels.x);
+		f32 scaleY = static_cast<f32>(m_dataRender.m_dpi * 4) / static_cast<f32>(m_dataRender.m_screenSizePixels.y);
+		f32 scaleZ = 1.f / (zFar - zNear);
+		Matrix4 projectionScale;
+		projectionScale.SetScale(Vector3(scaleX, scaleY, scaleZ));
+
+		projectionMatrix = projectionScale;
+		projectionMatrix = Matrix4::MultiplyAB(projectionMatrix, projectionMoveZ);
+		projectionMatrix = Matrix4::MultiplyAB(projectionMatrix, projectionCoords);
+
+		SetProjectionMatrix(projectionMatrix);
+	}
+
+	// light source
+	{
+		const Vector3 lightVectorWorld(+0.25f, +1.0f, -0.25f);
+
+		SetLightVector(lightVectorWorld);
+	}
+
+	// world to screen.
+	{
+		Matrix4 matrixScale;
+		matrixScale.SetScale(Vector3(static_cast<f32>(m_dataRender.m_dpi * 2), static_cast<f32>(m_dataRender.m_dpi * 2), 1.f));
+
+		m_worldToScreen = matrixScale;
+		m_worldToScreen = Matrix4::MultiplyAB(m_worldToScreen, projectionCoords);
+		m_worldToScreen = Matrix4::MultiplyAB(m_worldToScreen, viewMatrix);
+	}
+
+	// screen to world.
+	{
+		Matrix4 matrixRotateX;
+		matrixRotateX.SetRotateX(+DirectX::XM_PI / 8.f);
+
+		Matrix4 matrixRotateZ;
+		matrixRotateZ.SetRotateZ(-DirectX::XM_PI / 8.f);
+
+		Matrix4 matrixCoords;
+		matrixCoords.SetIdentity();
+		matrixCoords.m[1][1] = 0.0f;
+		matrixCoords.m[1][2] = +1.0f;
+		matrixCoords.m[2][2] = 0.0f;
+		matrixCoords.m[2][1] = -1.0f;
+
+		Matrix4 matrixScale;
+		matrixScale.SetScale(Vector3(1.f / static_cast<f32>(m_dataRender.m_dpi * 2), 1.f / static_cast<f32>(m_dataRender.m_dpi * 2), 1.f));
+
+		m_screenToWorld = matrixRotateX;
+		m_screenToWorld = Matrix4::MultiplyAB(m_screenToWorld, matrixRotateZ);
+		m_screenToWorld = Matrix4::MultiplyAB(m_screenToWorld, matrixCoords);
+		m_screenToWorld = Matrix4::MultiplyAB(m_screenToWorld, matrixScale);
+	}
+}
+
+void RenderMain::AlignWorldPosition(Vector3& worldPos)
+{
+	// world to screen.
+	Vector3 screenPos = Matrix4::MultiplyVector(worldPos, m_worldToScreen);
+	screenPos.x = static_cast<f32>(static_cast<s32>(screenPos.x)) + 0.5f;
+	screenPos.y = static_cast<f32>(static_cast<s32>(screenPos.y)) + 0.5f;
+	worldPos = Matrix4::MultiplyVector(screenPos, m_screenToWorld);
+}
+
+void RenderMain::AlignWorldSize(Vector3& worldSize)
+{
+	// world to screen.
+	Vector3 screenPos = Matrix4::MultiplyVector(worldSize, m_worldToScreen);
+	screenPos.x = static_cast<f32>(static_cast<s32>(screenPos.x + 0.5f));
+	screenPos.y = static_cast<f32>(static_cast<s32>(screenPos.y + 0.5f));
+	worldSize = Matrix4::MultiplyVector(screenPos, m_screenToWorld);
+}
+
+void RenderMain::AlignScreenSize(IVector2& screenSize)
+{
+	Vector3 screenPos(static_cast<f32>(screenSize.x), static_cast<f32>(screenSize.y), 0.f);
+	Vector3 worldSize = Matrix4::MultiplyVector(screenPos, m_screenToWorld);
+	worldSize.x = static_cast<f32>(static_cast<s32>((worldSize.x * 10.f) + 0.5f)) / 10.f;
+	worldSize.y = static_cast<f32>(static_cast<s32>((worldSize.y * 10.f) + 0.5f)) / 10.f;
+	worldSize.z = static_cast<f32>(static_cast<s32>((worldSize.z * 10.f) + 0.5f)) / 10.f;
+	Vector3 screenSize2 = Matrix4::MultiplyVector(worldSize, m_worldToScreen);
+	screenSize.x = static_cast<s32>(screenSize2.x);
+	screenSize.y = static_cast<s32>(screenSize2.y);
+
+	screenSize.x = ((screenSize.x + 1) / 2) * 2;
+	screenSize.y = ((screenSize.y + 1) / 2) * 2;
 }
 
 void RenderMain::__SetScreenSizePixels(const IVector2& screenSizePixels, s32 dpi)
@@ -626,6 +756,9 @@ void RenderMain::__EventResizeWindow(EventMessage_ResizeWindow* event)
 	m_dataRender.m_isChanged = true;
 
 	__ResizeBuffers();
+
+	// update various transforms.
+	__ConfigureTransforms();
 }
 
 }

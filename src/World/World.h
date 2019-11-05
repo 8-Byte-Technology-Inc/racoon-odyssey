@@ -82,7 +82,7 @@ protected:
 	void __EventHandler(EventMessage* pEvent);
 
 	void __ComputeModelWorldLocalTransform(MapModel& model);
-	void __ComputeModelWorldTransformRender(MapModel& model, Matrix4* pWorldTransform);
+	void __ComputeModelWorldTransformRender(MapModel& model, const Vector3& screenWorldPos, Matrix4* pWorldTransform);
 	void __ComputeCharacterModelBox(MapModel& model, MapModelBounds* pBounds);
 	void __ComputeCharacterModelSphere(MapModel& model, MapModelBounds* pBounds);
 
@@ -91,8 +91,6 @@ protected:
 	bool __IsCharacterModelCollideWithWall(const Vector3& posNew) const;
 	bool __IsCollision(const MapModelBounds& boundsA, const MapModelBounds& boundsB) const;
 	bool __IsCollisionAlongNormal(const Vector3& projection, const MapModelBounds& boundsA, const MapModelBounds& boundsB) const;
-
-	Vector3 __AlignPosition(const Vector3& position);
 
 	void __ParseMapStartElement(const u8* name, const u8** atts);
 	void __ParseMapCharacters(const u8* value, int len);

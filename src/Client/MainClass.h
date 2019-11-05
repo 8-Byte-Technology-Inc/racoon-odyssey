@@ -29,7 +29,6 @@ private:
 	HRESULT __CreateDesktopWindow();
 
 	void __ProcessRenderFrame();
-	void __SetRenderCamera();
 	void __ProcessRenderFrame(s32 frameCount);
 	void __DispatchEventQueue();
 	void __ProcessInternal();
