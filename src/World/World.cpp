@@ -12,6 +12,8 @@
 #include "render/RenderMain.h"
 #include "render/RenderModel.h"
 
+#include "Object.h"
+#include "Unit.h"
 #include "World.h"
 
 namespace TB8
@@ -21,7 +23,7 @@ const f32 TILES_PER_METER = 1.0f;
 
 World::World(Client_Globals* pGlobalState)
 	: Client_Globals_Accessor(pGlobalState)
-	, m_characterMass(2.f)
+	, m_pCharacterObj(nullptr)
 {
 }
 
@@ -71,109 +73,30 @@ void World::LoadCharacter(const char* pszCharacterModelPath, const char* pszMode
 	assert(!meshes.empty());
 	const RenderModel_Mesh& mesh = meshes.front();
 
-	m_characterModel.m_modelID = 0;
-	m_characterModel.m_pModel = pModel;
-	// scale the model so <y> is 0.75 meters.
-	m_characterModel.m_scale = .75f / mesh.m_size.y;
+	m_pCharacterObj = World_Unit::Alloc(__GetGlobals());
 
-	__ComputeModelWorldLocalTransform(m_characterModel);
-	__ComputeCharacterModelSphere(m_characterModel, &(m_characterModel.m_bounds));
+	m_pCharacterObj->m_modelID = 0;
+	m_pCharacterObj->m_pModel = pModel;
+	// scale the model so <y> is 0.75 meters.
+	m_pCharacterObj->m_pos = m_startPos;
+	m_pCharacterObj->m_scale = .75f / mesh.m_size.y;
+	m_pCharacterObj->m_mass = 2.f;
+	m_pCharacterObj->m_bounds.m_type = World_Object_Bounds_Type_Sphere;
+
+	m_pCharacterObj->Init();
 }
 
 void World::Update(s32 frameCount)
 {
-	// compute environmental forces.
-	const f32 forceFactor = 20.f;
-	const f32 forceDampen = 10.0f;
-	const f32 windResistFactor = 0.25f;
-	const f32 gravityFactor = 10.0f;
-	const f32 elapsedTime = static_cast<f32>(frameCount) / 60.f;
-	const f32 velocityMax = 5.f; // m/s.
-
-	// process jumping.
-	if (!is_approx_zero(m_characterForce.z))
-	{
-		if (is_approx_zero(m_characterModel.m_pos.z))
-		{
-			m_characterVelocity.z = +4.f;
-		}
-		m_characterForce.z = 0.f;
-	}
-
-	const Vector3 forceChar = m_characterForce * forceFactor;
-
-	const f32 velTotalSq = m_characterVelocity.MagSq();
-
-	Vector3 forceEnv;
-	forceEnv.x = (forceDampen + (velTotalSq * windResistFactor)) * get_sign(m_characterVelocity.x) * -1.f;
-	forceEnv.y = (forceDampen + (velTotalSq * windResistFactor)) * get_sign(m_characterVelocity.y) * -1.f;
-	forceEnv.z = (m_characterMass * gravityFactor) * -1.f;
-
-	// compute net force.
-	const Vector3 forceNet = forceChar + forceEnv;
-
-	// compute accel.
-	const Vector3 accel = forceNet / m_characterMass;
-
-	// compute new velocity.
-	Vector3 vel = m_characterVelocity + (accel * elapsedTime);
-
-	// don't exceed max velocity.
-	vel.x = std::min<f32>(abs(vel.x), velocityMax) * get_sign(vel.x);
-	vel.y = std::min<f32>(abs(vel.y), velocityMax) * get_sign(vel.y);
-	vel.z = std::min<f32>(abs(vel.z), velocityMax) * get_sign(vel.z);
-
-	if (is_approx_zero(forceChar.x))
-	{
-		if (is_approx_zero(m_characterVelocity.x))
-			vel.x = 0.f;
-		else if ((vel.x < 0.f) && (m_characterVelocity.x > 0.f))
-			vel.x = 0.f;
-		else if ((vel.x > 0.f) && (m_characterVelocity.x < 0.f))
-			vel.x = 0.f;
-	}
-
-	if (is_approx_zero(forceChar.y))
-	{
-		if (is_approx_zero(m_characterVelocity.y))
-			vel.y = 0.f;
-		else if ((vel.y < 0.f) && (m_characterVelocity.y > 0.f))
-			vel.y = 0.f;
-		else if ((vel.y > 0.f) && (m_characterVelocity.y < 0.f))
-			vel.y = 0.f;
-	}
-
-	const Vector3& vel0 = m_characterVelocity;
-	const Vector3& vel1 = vel;
-
-	// compute new position.
-	Vector3 pos = m_characterModel.m_pos + (vel0 + ((vel1 - vel0) * 0.5f)) * elapsedTime;
-
-	// compute new facing.
-	f32 facing = m_characterModel.m_rotation;
-	if (!is_approx_zero(vel1.x) || !is_approx_zero(vel1.y))
-	{
-		Vector2 facingVector(vel1.x, vel1.y);
-		facingVector.Normalize();
-		const f32 angle = std::atan2(facingVector.y, facingVector.x);
-		facing = (angle / DirectX::XM_PI) * 180.f;
-	}
-
-	// can't go lower than 0.
-	if (pos.z < 0.f)
-	{
-		pos.z = 0.f;
-		vel.z = 0.f;
-	}
+	Vector3 pos;
+	Vector3 vel;
+	m_pCharacterObj->ComputeNextPosition(frameCount, pos, vel);
 
 	// adjust position & velocity for collisions.
 	__AdjustCharacterModelPositionForCollisions(pos, vel);
 
 	// update.
-	m_characterModel.m_pos = pos;
-	m_characterModel.m_rotation = facing;
-	m_characterVelocity = vel;
-	__ComputeCharacterModelSphere(m_characterModel, &(m_characterModel.m_bounds));
+	m_pCharacterObj->UpdatePosition(pos, vel);
 }
 
 void World::Render(RenderMain* pRenderer)
@@ -184,52 +107,30 @@ void World::Render(RenderMain* pRenderer)
 
 	// compute which tiles we'll draw.
 	IRect tiles;
-	tiles.left = static_cast<u32>((m_characterModel.m_pos.x - ((screenSizeWorld.x / 2.f) * 3.f) / TILES_PER_METER));
-	tiles.right = static_cast<u32>((m_characterModel.m_pos.x + ((screenSizeWorld.x / 2.f) * 3.f) / TILES_PER_METER)) + 1;
-	tiles.top = static_cast<u32>((m_characterModel.m_pos.y - ((screenSizeWorld.y / 2.f) * 4.f) / TILES_PER_METER));
-	tiles.bottom = static_cast<u32>((m_characterModel.m_pos.y + ((screenSizeWorld.y / 2.f) * 4.f) / TILES_PER_METER)) + 1;
+	tiles.left = static_cast<u32>((m_pCharacterObj->m_pos.x - ((screenSizeWorld.x / 2.f) * 3.f) / TILES_PER_METER));
+	tiles.right = static_cast<u32>((m_pCharacterObj->m_pos.x + ((screenSizeWorld.x / 2.f) * 3.f) / TILES_PER_METER)) + 1;
+	tiles.top = static_cast<u32>((m_pCharacterObj->m_pos.y - ((screenSizeWorld.y / 2.f) * 4.f) / TILES_PER_METER));
+	tiles.bottom = static_cast<u32>((m_pCharacterObj->m_pos.y + ((screenSizeWorld.y / 2.f) * 4.f) / TILES_PER_METER)) + 1;
 
-	Vector3 screenWorldPos = m_characterModel.m_pos;
+	Vector3 screenWorldPos = m_pCharacterObj->m_pos;
 	__GetRenderer()->AlignWorldPosition(screenWorldPos);
 
 	// draw the tiles & walls.
 	IVector2 cellPos;
-	for (cellPos.x = tiles.left; cellPos.x < tiles.right; ++cellPos.x)
+	for (cellPos.y = tiles.top; cellPos.y < tiles.bottom; ++cellPos.y)
 	{
-		for (cellPos.y = tiles.top; cellPos.y < tiles.bottom; ++cellPos.y)
+		cellPos.x = tiles.left;
+		for (std::multimap<IVector2, World_Object*>::iterator it = m_objects.lower_bound(cellPos);  
+			(it != m_objects.end()) && (it->first.y == cellPos.y) && (it->first.x <= tiles.right); ++it)
 		{
-			MapCell& cell = __GetCell(cellPos);
-			{
-				MapModel& model = cell.m_tile;
-				if (model.m_pModel)
-				{
-					Matrix4 worldTransform;
-					__ComputeModelWorldTransformRender(model, screenWorldPos, &worldTransform);
-					model.m_pModel->SetWorldTransform(worldTransform);
-					model.m_pModel->Render(pRenderer);
-				}
-			}
-
-			for (u32 i = 0; i < ARRAYSIZE(cell.m_wall); ++i)
-			{
-				MapModel& model = cell.m_wall[i];
-				if (model.m_pModel)
-				{
-					Matrix4 worldTransform;
-					__ComputeModelWorldTransformRender(model, screenWorldPos, &worldTransform);
-					model.m_pModel->SetWorldTransform(worldTransform);
-					model.m_pModel->Render(pRenderer);
-				}
-			}
+			World_Object* pObj = it->second;
+			pObj->Render(screenWorldPos);
 		}
 	}
 
 	// draw the character.
 	{
-		Matrix4 worldTransform;
-		__ComputeModelWorldTransformRender(m_characterModel, m_characterModel.m_pos, &worldTransform);
-		m_characterModel.m_pModel->SetWorldTransform(worldTransform);
-		m_characterModel.m_pModel->Render(pRenderer);
+		m_pCharacterObj->Render(m_pCharacterObj->m_pos);
 	}
 }
 
@@ -243,6 +144,13 @@ void World::__Initialize()
 void World::__Uninitialize()
 {
 	__GetEventQueue()->UnregisterForMessagesByRegistree(EventModuleID_World);
+
+	for (std::multimap<IVector2, World_Object*>::iterator it = m_objects.begin(); it != m_objects.end(); ++it)
+	{
+		OBJFREE(it->second);
+	}
+
+	OBJFREE(m_pCharacterObj);
 
 	for (std::map<u32, RenderModel*>::iterator it = m_mapModels.begin(); it != m_mapModels.end(); ++it)
 	{
@@ -259,15 +167,18 @@ void World::__EventHandler(EventMessage* pEvent)
 		EventMessage_MoveStart* pEventMoveStart = static_cast<EventMessage_MoveStart*>(pEvent);
 		if (pEventMoveStart->m_dx != 0)
 		{
-			m_characterForce.x = static_cast<f32>(pEventMoveStart->m_dx);
+			const Vector3 force(static_cast<f32>(pEventMoveStart->m_dx), m_pCharacterObj->GetForce().y, m_pCharacterObj->GetForce().z);
+			m_pCharacterObj->SetForce(force);
 		}
 		if (pEventMoveStart->m_dy != 0)
 		{
-			m_characterForce.y = static_cast<f32>(pEventMoveStart->m_dy);
+			const Vector3 force(m_pCharacterObj->GetForce().x, static_cast<f32>(pEventMoveStart->m_dy), m_pCharacterObj->GetForce().z);
+			m_pCharacterObj->SetForce(force);
 		}
 		if (pEventMoveStart->m_dz != 0)
 		{
-			m_characterForce.z = static_cast<f32>(pEventMoveStart->m_dz);
+			const Vector3 force(m_pCharacterObj->GetForce().x, m_pCharacterObj->GetForce().y, static_cast<f32>(pEventMoveStart->m_dz));
+			m_pCharacterObj->SetForce(force);
 		}
 		break;
 	}
@@ -276,126 +187,24 @@ void World::__EventHandler(EventMessage* pEvent)
 		EventMessage_MoveStart* pEventMoveEnd = static_cast<EventMessage_MoveStart*>(pEvent);
 		if (pEventMoveEnd->m_dx != 0)
 		{
-			m_characterForce.x = 0.f;
+			const Vector3 force(0.f, m_pCharacterObj->GetForce().y, m_pCharacterObj->GetForce().z);
+			m_pCharacterObj->SetForce(force);
 		}
 		if (pEventMoveEnd->m_dy != 0)
 		{
-			m_characterForce.y = 0.f;
+			const Vector3 force(m_pCharacterObj->GetForce().x, 0.f, m_pCharacterObj->GetForce().z);
+			m_pCharacterObj->SetForce(force);
 		}
 		if (pEventMoveEnd->m_dz != 0)
 		{
-			m_characterForce.z = 0.f;
+			const Vector3 force(m_pCharacterObj->GetForce().x, m_pCharacterObj->GetForce().y, 0.f);
+			m_pCharacterObj->SetForce(force);
 		}
 		break;
 	}
 	default:
 		break;
 	}
-}
-
-void World::__ComputeModelWorldLocalTransform(MapModel& model)
-{
-	const std::vector<RenderModel_Mesh>& meshes = model.m_pModel->GetMeshes();
-	assert(!meshes.empty());
-	const RenderModel_Mesh& mesh = meshes.front();
-
-	// center it, still in directX coords.
-	Matrix4 matrixCenter;
-	matrixCenter.SetTranslation(Vector3(0.f - ((mesh.m_max.x + mesh.m_min.x) / 2.f), 0.f - mesh.m_min.y, 0.f - ((mesh.m_max.z + mesh.m_min.z) / 2.f)));
-
-	// align size of the model.
-	const Vector3 sizeBase(mesh.m_max.x - mesh.m_min.x, mesh.m_max.y - mesh.m_min.y, mesh.m_max.z - mesh.m_min.z);
-	Vector3 sizeAligned = sizeBase * model.m_scale;
-	__GetRenderer()->AlignWorldSize(sizeAligned);
-
-	// scale it.
-	const Vector3 scale(is_approx_zero(sizeBase.x) ? 1.f : (sizeAligned.x / sizeBase.x), 
-					is_approx_zero(sizeBase.y) ? 1.f : (sizeAligned.y / sizeBase.y), 
-					is_approx_zero(sizeBase.z) ? 1.f : (sizeAligned.z / sizeBase.z));
-
-	Matrix4 matrixScale;
-	matrixScale.SetScale(scale);
-
-	// translate from directX to world coordinate system.
-	Matrix4 matrixCoordsToWorld;
-	matrixCoordsToWorld.SetIdentity();
-	matrixCoordsToWorld.m[1][1] = 0.0f;
-	matrixCoordsToWorld.m[2][1] = -1.0f;
-	matrixCoordsToWorld.m[2][2] = 0.0f;
-	matrixCoordsToWorld.m[1][2] = 1.0f;
-
-	model.m_worldLocalTransform = matrixCoordsToWorld;
-	model.m_worldLocalTransform = Matrix4::MultiplyAB(model.m_worldLocalTransform, matrixScale);
-	model.m_worldLocalTransform = Matrix4::MultiplyAB(model.m_worldLocalTransform, matrixCenter);
-}
-
-void World::__ComputeModelWorldTransformRender(MapModel& model, const Vector3& screenWorldPos, Matrix4* pWorldTransform)
-{
-	// rotate it.
-	Matrix4 matrixRotate;
-	matrixRotate.SetRotate(Vector3(0.f, 0.f, DirectX::XM_PI * (model.m_rotation) / 180.f));
-
-	// position it.
-	Vector3 renderPos = model.m_pos - screenWorldPos;
-
-	Matrix4 matrixPosition;
-	matrixPosition.SetTranslation(renderPos);
-
-	// compute the overall transform.
-	*pWorldTransform = matrixPosition;
-	*pWorldTransform  = Matrix4::MultiplyAB(*pWorldTransform, matrixRotate);
-	*pWorldTransform  = Matrix4::MultiplyAB(*pWorldTransform, model.m_worldLocalTransform);
-}
-
-void World::__ComputeCharacterModelBox(MapModel& model, MapModelBounds* pBounds)
-{
-	const std::vector<RenderModel_Mesh>& meshes = model.m_pModel->GetMeshes();
-	assert(!meshes.empty());
-	const RenderModel_Mesh& mesh = meshes.front();
-
-	// rotate it.
-	Matrix4 matrixRotate;
-	matrixRotate.SetRotate(Vector3(0.f, 0.f, DirectX::XM_PI * (model.m_rotation) / 180.f));
-
-	// position it.
-	Matrix4 matrixPosition;
-	matrixPosition.SetTranslation(model.m_pos);
-
-	// compute the overall transform.
-	Matrix4 worldTransform = matrixPosition;
-	worldTransform = Matrix4::MultiplyAB(worldTransform, matrixRotate);
-	worldTransform = Matrix4::MultiplyAB(worldTransform, model.m_worldLocalTransform);
-
-	pBounds->m_type = MapModelBounds_Type_Box;
-	pBounds->m_center = Vector3((mesh.m_max.x + mesh.m_min.x) / 2.f, (mesh.m_max.y + mesh.m_min.y) / 2.f, (mesh.m_max.z + mesh.m_min.z) / 2.f);
-	pBounds->m_coords[0] = Vector3(mesh.m_min.x, mesh.m_min.y, mesh.m_min.z);
-	pBounds->m_coords[1] = Vector3(mesh.m_max.x, mesh.m_min.y, mesh.m_min.z);
-	pBounds->m_coords[2] = Vector3(mesh.m_max.x, mesh.m_max.y, mesh.m_min.z);
-	pBounds->m_coords[3] = Vector3(mesh.m_min.x, mesh.m_max.y, mesh.m_min.z);
-	pBounds->m_coords[4] = Vector3(mesh.m_min.x, mesh.m_min.y, mesh.m_max.z);
-	pBounds->m_coords[5] = Vector3(mesh.m_max.x, mesh.m_min.y, mesh.m_max.z);
-	pBounds->m_coords[6] = Vector3(mesh.m_max.x, mesh.m_max.y, mesh.m_max.z);
-	pBounds->m_coords[7] = Vector3(mesh.m_min.x, mesh.m_max.y, mesh.m_max.z);
-
-	pBounds->m_center = Matrix4::MultiplyVector(pBounds->m_center, worldTransform);
-	for (u32 i = 0; i < ARRAYSIZE(pBounds->m_coords); ++i)
-	{
-		pBounds->m_coords[i] = Matrix4::MultiplyVector(pBounds->m_coords[i], worldTransform);
-	}
-}
-
-void World::__ComputeCharacterModelSphere(MapModel& model, MapModelBounds* pBounds)
-{
-	const std::vector<RenderModel_Mesh>& meshes = model.m_pModel->GetMeshes();
-	assert(!meshes.empty());
-	const RenderModel_Mesh& mesh = meshes.front();
-
-	const Vector3 vCenter((mesh.m_max.x + mesh.m_min.x) / 2.f, (mesh.m_max.y + mesh.m_min.y) / 2.f, (mesh.m_max.z + mesh.m_min.z) / 2.f);
-	const f32 radius = std::max<f32>(std::max<f32>(mesh.m_max.x - mesh.m_min.x, mesh.m_max.y - mesh.m_min.y), mesh.m_max.z - mesh.m_min.z) / 2.f;
-
-	pBounds->m_type = MapModelBounds_Type_Sphere;
-	pBounds->m_center = Matrix4::MultiplyVector(vCenter, model.m_worldLocalTransform) + model.m_pos;
-	pBounds->m_radius = radius * model.m_scale;
 }
 
 void World::__AdjustCharacterModelPositionForCollisions(Vector3& pos, Vector3& vel)
@@ -410,12 +219,12 @@ void World::__AdjustCharacterModelPositionForCollisions(Vector3& pos, Vector3& v
 
 void World::__AdjustCharacterModelPositionForCollisionsAxis(Vector3& pos, Vector3& vel, const Vector3& axis)
 {
-	const MapModel& model = m_characterModel;
-	const Vector3 posDelta = pos - model.m_pos;
+	const World_Object& object = *m_pCharacterObj;
+	const Vector3 posDelta = pos - object.m_pos;
 	const f32 posDeltaAxisMag = Vector3::Dot(posDelta, axis);
 	if (is_approx_zero(posDeltaAxisMag))
 		return;
-	if (!__IsCharacterModelCollideWithWall(model.m_pos + (axis * posDeltaAxisMag)))
+	if (!__IsCharacterModelCollideWithWall(object.m_pos + (axis * posDeltaAxisMag)))
 		return;
 
 	// this axis collides. interpolate position.
@@ -425,7 +234,7 @@ void World::__AdjustCharacterModelPositionForCollisionsAxis(Vector3& pos, Vector
 	for (u32 i = 0; i < 8; ++i)
 	{
 		const f32 mid = (max + min) / 2.f;
-		if (__IsCharacterModelCollideWithWall(model.m_pos + (axis * mid)))
+		if (__IsCharacterModelCollideWithWall(object.m_pos + (axis * mid)))
 		{
 			max = mid;
 		}
@@ -438,28 +247,27 @@ void World::__AdjustCharacterModelPositionForCollisionsAxis(Vector3& pos, Vector
 	// set revised position.
 	if (!is_approx_zero(axis.x))
 	{
-		pos.x = model.m_pos.x + min;
+		pos.x = object.m_pos.x + min;
 		vel.x = 0.f;
 	}
 	if (!is_approx_zero(axis.y))
 	{
-		pos.y = model.m_pos.y + min;
+		pos.y = object.m_pos.y + min;
 		vel.y = 0.f;
 	}
 	if (!is_approx_zero(axis.z))
 	{
-		pos.z = model.m_pos.z + min;
+		pos.z = object.m_pos.z + min;
 		vel.z = 0.f;
 	}
 }
 
-
 bool World::__IsCharacterModelCollideWithWall(const Vector3& posNew) const
 {
-	const MapModel& model = m_characterModel;
-	const Vector3 posDelta = posNew - model.m_pos;
+	const World_Object& object = *m_pCharacterObj;
+	const Vector3 posDelta = posNew - object.m_pos;
 
-	MapModelBounds boundsNew = model.m_bounds;
+	World_Object_Bounds boundsNew = object.m_bounds;
 	boundsNew.m_center = boundsNew.m_center + posDelta;
 
 	// compute which tiles to examine for collisions.
@@ -471,122 +279,20 @@ bool World::__IsCharacterModelCollideWithWall(const Vector3& posNew) const
 
 	// look at walls for each tile.
 	IVector2 cellPos;
-	for (cellPos.x = tiles.left; cellPos.x <= tiles.right; ++cellPos.x)
+	for (cellPos.y = tiles.top; cellPos.y <= tiles.bottom; ++cellPos.y)
 	{
-		for (cellPos.y = tiles.top; cellPos.y <= tiles.bottom; ++cellPos.y)
+		cellPos.x = tiles.left;
+		for (std::multimap<IVector2, World_Object*>::const_iterator it = m_objects.lower_bound(cellPos);
+			(it != m_objects.end()) && (it->first.y == cellPos.y) && (it->first.x <= tiles.right); ++it)
 		{
-			const MapCell& cell = __GetCell(cellPos);
-			for (u32 i = 0; i < ARRAYSIZE(cell.m_wall); ++i)
-			{
-				const MapModel& wallModel = cell.m_wall[i];
-				if (!wallModel.m_pModel)
-					continue;
-				if (!__IsCollision(wallModel.m_bounds, boundsNew))
-					continue;
-				return true;
-			}
+			World_Object* pObj = it->second;
+			if (!pObj->IsCollision(boundsNew))
+				continue;
+			return true;
 		}
 	}
 
 	return false;
-}
-
-bool World::__IsCollision(const MapModelBounds& boundsA, const MapModelBounds& boundsB) const
-{
-	if (boundsA.m_type == MapModelBounds_Type_Box)
-	{
-		const Vector3 n1 = Vector3::ComputeNormal(boundsA.m_coords[0], boundsA.m_coords[1], boundsA.m_coords[3]);
-		if (!__IsCollisionAlongNormal(n1, boundsA, boundsB))
-			return false;
-		const Vector3 n2 = Vector3::ComputeNormal(boundsA.m_coords[1], boundsA.m_coords[2], boundsA.m_coords[5]);
-		if (!__IsCollisionAlongNormal(n2, boundsA, boundsB))
-			return false;
-		const Vector3 n3 = Vector3::ComputeNormal(boundsA.m_coords[0], boundsA.m_coords[4], boundsA.m_coords[1]);
-		if (!__IsCollisionAlongNormal(n3, boundsA, boundsB))
-			return false;
-	}
-
-	if (boundsB.m_type == MapModelBounds_Type_Box)
-	{
-		const Vector3 n1 = Vector3::ComputeNormal(boundsB.m_coords[0], boundsB.m_coords[1], boundsB.m_coords[3]);
-		if (!__IsCollisionAlongNormal(n1, boundsA, boundsB))
-			return false;
-		const Vector3 n2 = Vector3::ComputeNormal(boundsB.m_coords[1], boundsB.m_coords[2], boundsB.m_coords[5]);
-		if (!__IsCollisionAlongNormal(n2, boundsA, boundsB))
-			return false;
-		const Vector3 n3 = Vector3::ComputeNormal(boundsB.m_coords[0], boundsB.m_coords[4], boundsB.m_coords[1]);
-		if (!__IsCollisionAlongNormal(n3, boundsA, boundsB))
-			return false;
-	}
-
-	if ((boundsA.m_type == MapModelBounds_Type_Sphere)
-		&& (boundsB.m_type == MapModelBounds_Type_Sphere))
-	{
-		const Vector3 AB = boundsB.m_center - boundsA.m_center;
-		const Vector3 n = Vector3::Normalize(AB);
-		if (!__IsCollisionAlongNormal(n, boundsA, boundsB))
-			return false;
-	}
-
-	return true;
-}
-
-bool World::__IsCollisionAlongNormal(const Vector3& normal, const MapModelBounds& boundsA, const MapModelBounds& boundsB) const
-{
-	u32 cProjA = 0;
-	u32 cProjB = 0;
-	f32 projA[8];
-	f32 projB[8];
-
-	const Vector3 centerToCenter(boundsB.m_center.x - boundsA.m_center.x, boundsB.m_center.y - boundsA.m_center.y, boundsB.m_center.z - boundsA.m_center.z);
-	const f32 projCenter = Vector3::Dot(centerToCenter, normal);
-
-	if (boundsA.m_type == MapModelBounds_Type_Box)
-	{
-		assert(ARRAYSIZE(boundsA.m_coords) <= ARRAYSIZE(projA));
-		for (u32 i = 0; i < ARRAYSIZE(boundsA.m_coords); ++i)
-		{
-			projA[i] = Vector3::Dot(boundsA.m_coords[i] - boundsA.m_center, normal);
-		}
-		cProjA = ARRAYSIZE(boundsA.m_coords);
-		std::sort(projA, projA + cProjA);
-	}
-	else if (boundsA.m_type == MapModelBounds_Type_Sphere)
-	{
-		assert(2 <= ARRAYSIZE(projA));
-		projA[0] = -boundsA.m_radius;
-		projA[1] = +boundsA.m_radius;
-		cProjA = 2;
-	}
-
-	if (boundsB.m_type == MapModelBounds_Type_Box)
-	{
-		assert(ARRAYSIZE(boundsB.m_coords) <= ARRAYSIZE(projB));
-		for (u32 i = 0; i < ARRAYSIZE(boundsB.m_coords); ++i)
-		{
-			projB[i] = Vector3::Dot(boundsB.m_coords[i] - boundsB.m_center, normal);
-		}
-		cProjB = ARRAYSIZE(boundsB.m_coords);
-		std::sort(projB, projB + cProjB);
-	}
-	else if (boundsB.m_type == MapModelBounds_Type_Sphere)
-	{
-		assert(2 <= ARRAYSIZE(projB));
-		projB[0] = -boundsB.m_radius;
-		projB[1] = +boundsB.m_radius;
-		cProjB = 2;
-	}
-
-	if (projCenter < 0.f)
-	{
-		const f32 dist = (-1.f * projCenter) - projB[cProjB - 1] + projA[0];
-		return dist < 0.f;
-	}
-	else
-	{
-		const f32 dist = projCenter - projA[cProjA - 1] + projB[0];
-		return dist < 0.f;
-	}
 }
 
 void World::__ParseMapStartElement(const u8* pszName, const u8** ppAttribs)
@@ -665,25 +371,23 @@ void World::__ParseMapStartElement(const u8* pszName, const u8** ppAttribs)
 			}
 		}
 
-		m_map.resize(m_mapSize.x * m_mapSize.y);
-
 		IVector2 pos;
 		for (pos.x = 0; pos.x < m_mapSize.x; ++pos.x)
 		{
 			for (pos.y = 0; pos.y < m_mapSize.y; ++pos.y)
 			{
-				MapCell& cell = __GetCell(pos);
-
-				MapModel& model = cell.m_tile;
 				std::map<u32, RenderModel*>::iterator itModel = m_mapModels.find(defaultTile);
 				if (itModel != m_mapModels.end())
 				{
-					model.m_modelID = defaultTile;
-					model.m_pModel = itModel->second;
-					model.m_scale = 1.f;
-					model.m_rotation = 0.f;
-					model.m_pos = Vector3(static_cast<f32>(pos.x), static_cast<f32>(pos.y), 0.f);
-					__ComputeModelWorldLocalTransform(model);
+					World_Object* pObj = World_Object::Alloc(__GetGlobals());
+					pObj->m_modelID = defaultTile;
+					pObj->m_pModel = itModel->second;
+					pObj->m_scale = 1.f;
+					pObj->m_rotation = 0.f;
+					pObj->m_pos = Vector3(static_cast<f32>(pos.x), static_cast<f32>(pos.y), 0.f);
+					pObj->Init();
+
+					m_objects.insert(std::make_pair(pos, pObj));
 				}
 			}
 		}
@@ -706,7 +410,7 @@ void World::__ParseMapStartElement(const u8* pszName, const u8** ppAttribs)
 			}
 		}
 
-		m_characterModel.m_pos = posStart;
+		m_startPos = posStart;
 	}
 	if (_strcmpi(reinterpret_cast<const char*>(pszName), "cell") == 0)
 	{
@@ -760,8 +464,6 @@ void World::__ParseMapStartElement(const u8* pszName, const u8** ppAttribs)
 						offset = Vector2(0.5f, 1.0f);
 					}
 
-					MapCell& cell = m_map[(pos.y * m_mapSize.x) + pos.x];
-					MapModel& model = cell.m_wall[index];
 					const u32 modelID = atol(values[1].c_str());
 					std::map<u32, RenderModel*>::iterator it = m_mapModels.find(modelID);
 					if (it != m_mapModels.end())
@@ -770,16 +472,20 @@ void World::__ParseMapStartElement(const u8* pszName, const u8** ppAttribs)
 						const std::vector<RenderModel_Mesh>& meshes = it->second->GetMeshes();
 						if (!meshes.empty())
 						{
+							World_Object* pObj = World_Object::Alloc(__GetGlobals());
+
 							const RenderModel_Mesh& mesh = meshes.front();
 
-							model.m_modelID = modelID;
-							model.m_pos = Vector3(static_cast<f32>(pos.x) + offset.x, static_cast<f32>(pos.y) + offset.y, 0.f);
-							model.m_scale = 1.0f / mesh.m_size.x;
-							model.m_rotation = rotation;
-							model.m_pModel = pModel;
+							pObj->m_modelID = modelID;
+							pObj->m_pos = Vector3(static_cast<f32>(pos.x) + offset.x, static_cast<f32>(pos.y) + offset.y, 0.f);
+							pObj->m_scale = 1.0f / mesh.m_size.x;
+							pObj->m_rotation = rotation;
+							pObj->m_pModel = pModel;
+							pObj->m_bounds.m_type = World_Object_Bounds_Type_Box;
 
-							__ComputeModelWorldLocalTransform(model);
-							__ComputeCharacterModelBox(model, &(model.m_bounds));
+							pObj->Init();
+
+							m_objects.insert(std::make_pair(IVector2(static_cast<s32>(pObj->m_pos.x), static_cast<s32>(pObj->m_pos.y)), pObj));
 						}
 					}
 				}
@@ -801,9 +507,5 @@ XML_Parser_Result World::__ParseMapRead(TB8::File* f, u8* pBuf, u32* pSize)
 	*pSize = f->Read(pBuf, *pSize);
 	return (*pSize > 0) ? XML_Parser_Result_Success : XML_Parser_Result_EOF;
 }
-
- 
-
-
 
 }
