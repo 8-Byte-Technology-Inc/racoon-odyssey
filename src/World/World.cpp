@@ -499,10 +499,10 @@ bool World::__IsCollision(const MapModelBounds& boundsA, const MapModelBounds& b
 		if (!__IsCollisionAlongNormal(n1, boundsA, boundsB))
 			return false;
 		const Vector3 n2 = Vector3::ComputeNormal(boundsA.m_coords[1], boundsA.m_coords[2], boundsA.m_coords[5]);
-		if (!__IsCollisionAlongNormal(n1, boundsA, boundsB))
+		if (!__IsCollisionAlongNormal(n2, boundsA, boundsB))
 			return false;
 		const Vector3 n3 = Vector3::ComputeNormal(boundsA.m_coords[0], boundsA.m_coords[4], boundsA.m_coords[1]);
-		if (!__IsCollisionAlongNormal(n1, boundsA, boundsB))
+		if (!__IsCollisionAlongNormal(n3, boundsA, boundsB))
 			return false;
 	}
 
@@ -512,10 +512,10 @@ bool World::__IsCollision(const MapModelBounds& boundsA, const MapModelBounds& b
 		if (!__IsCollisionAlongNormal(n1, boundsA, boundsB))
 			return false;
 		const Vector3 n2 = Vector3::ComputeNormal(boundsB.m_coords[1], boundsB.m_coords[2], boundsB.m_coords[5]);
-		if (!__IsCollisionAlongNormal(n1, boundsA, boundsB))
+		if (!__IsCollisionAlongNormal(n2, boundsA, boundsB))
 			return false;
 		const Vector3 n3 = Vector3::ComputeNormal(boundsB.m_coords[0], boundsB.m_coords[4], boundsB.m_coords[1]);
-		if (!__IsCollisionAlongNormal(n1, boundsA, boundsB))
+		if (!__IsCollisionAlongNormal(n3, boundsA, boundsB))
 			return false;
 	}
 
