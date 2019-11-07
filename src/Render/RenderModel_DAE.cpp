@@ -408,6 +408,8 @@ void RenderModel::__InitializeFromDAE(RenderMain* pRenderer, const char* path, c
 				assert(src.m_parent < src.m_index);
 				RenderModel_Joint& dst = m_joints[src.m_index];
 
+				dst.m_name = src.m_name;
+
 				dst.m_index = src.m_index;
 				dst.m_parentIndex = src.m_parent;
 
@@ -415,7 +417,7 @@ void RenderModel::__InitializeFromDAE(RenderMain* pRenderer, const char* path, c
 				dst.m_baseInvBindMatrix = src.m_invBindMatrix;
 
 				dst.m_isDirty = true;
-				dst.m_rotateMatrix.SetIdentity();
+				dst.m_effectiveMatrix = dst.m_baseMatrix;
 				dst.m_computedMatrix.SetIdentity();
 			}
 		}
@@ -425,23 +427,34 @@ void RenderModel::__InitializeFromDAE(RenderMain* pRenderer, const char* path, c
 	if (!userCtx.m_animIDMap.empty())
 	{
 		{
-			RenderModel_Anims node;
-			node.m_animIndex = static_cast<s32>(m_anims.size());
-			node.m_animID = -1;
-			node.m_animTime = -1.f;
-			m_anims.push_back(node);
+			m_anims.emplace_back();
+			RenderModel_Anim& anim = m_anims.back();
+			anim.m_animIndex = static_cast<s32>(m_anims.size()) - 1;
+			anim.m_animID = -1;
+			anim.m_animTime = -1.f;
 		}
 
 		for (std::map<f32, s32>::iterator it = userCtx.m_animIDMap.begin(); it != userCtx.m_animIDMap.end(); ++it)
 		{
-			RenderModel_Anims node;
-			node.m_animIndex = static_cast<s32>(m_anims.size());
-			node.m_animID = it->second;
-			node.m_animTime = it->first;
-			m_anims.push_back(node);
-		}
+			m_anims.emplace_back();
+			RenderModel_Anim& anim = m_anims.back();
+			anim.m_animIndex = static_cast<s32>(m_anims.size()) - 1;
+			anim.m_animID = it->second;
+			anim.m_animTime = it->first;
 
-		m_animIndex = 0;
+			RenderModel_DAE_Mesh& mesh = userCtx.m_meshes.front();
+			for (std::vector<RenderModel_DAE_SkinJoint>::iterator itJoint = mesh.m_skinJoints.begin(); itJoint != mesh.m_skinJoints.end(); ++itJoint)
+			{
+				const RenderModel_DAE_SkinJoint& srcJoint = *itJoint;
+				RenderModel_DAE_Anim_Transform* pTransform = __LookupAnimTransform(userCtx, srcJoint.m_name.c_str(), anim.m_animID);
+				if (!pTransform)
+					continue;
+				anim.m_joints.emplace_back();
+				RenderModel_Anim_Joint& dstAnimJoint = anim.m_joints.back();
+				dstAnimJoint.m_pJoint = &(m_joints[srcJoint.m_index]);
+				dstAnimJoint.m_transform = pTransform->m_jointMatrix;
+			}
+		}
 	}
 
 	// setup bone texture.
@@ -470,7 +483,7 @@ void RenderModel::__InitializeFromDAE(RenderMain* pRenderer, const char* path, c
 			}
 
 			// add bone animation data for each animation.
-			for (std::vector<RenderModel_Anims>::iterator it = m_anims.begin(); it != m_anims.end(); ++it)
+			for (std::vector<RenderModel_Anim>::iterator it = m_anims.begin(); it != m_anims.end(); ++it)
 			{
 				__SetBoneTextureData(userCtx, pBoneTextureData, boneTextureSize, *it);
 			}
@@ -793,7 +806,7 @@ void RenderModel::__UpdateLimits(RenderModel_DAE_Mesh& mesh, const Vector3& src)
 	mesh.m_max.z = std::max<f32>(mesh.m_max.z, src.z);
 }
 
-void RenderModel::__SetBoneTextureData(RenderModel_DAE_ParseContext& parseContext, f32* pBoneTextureData, const IVector2& boneTextureSize, const RenderModel_Anims& anim)
+void RenderModel::__SetBoneTextureData(RenderModel_DAE_ParseContext& parseContext, f32* pBoneTextureData, const IVector2& boneTextureSize, const RenderModel_Anim& anim)
 {
 	const s32 xBase = 1 + anim.m_animIndex * 8;
 
@@ -1228,13 +1241,13 @@ void RenderModel::__ParseDAEStartElement(void *_ctx, const u8* name, const u8** 
 	}
 
 	// animations.
-	if ((ctx->m_tagStack.size() == 5)
+	if ((ctx->m_tagStack.size() >= 5)
 		&& !ctx->m_idStack.empty()
 		&& (_stricmp(ctx->m_tagStack[0].c_str(), "COLLADA") == 0)
 		&& (_stricmp(ctx->m_tagStack[1].c_str(), "library_animations") == 0)
-		&& (_stricmp(ctx->m_tagStack[2].c_str(), "animation") == 0)
-		&& (_stricmp(ctx->m_tagStack[3].c_str(), "source") == 0)
-		&& (_stricmp(ctx->m_tagStack[4].c_str(), "float_array") == 0))
+		&& (_stricmp(ctx->m_tagStack[ctx->m_tagStack.size() - 3].c_str(), "animation") == 0)
+		&& (_stricmp(ctx->m_tagStack[ctx->m_tagStack.size() - 2].c_str(), "source") == 0)
+		&& (_stricmp(ctx->m_tagStack[ctx->m_tagStack.size() - 1].c_str(), "float_array") == 0))
 	{
 		std::string& id = ctx->m_idStack.back().second;
 		if (id.find("pose_matrix-input-array") != std::string::npos)
@@ -1246,16 +1259,32 @@ void RenderModel::__ParseDAEStartElement(void *_ctx, const u8* name, const u8** 
 		}
 		else if (id.find("pose_matrix-output-array") != std::string::npos)
 		{
-			RenderModel_DAE_Anim node;
-			node.m_jointName = id;
-			node.m_jointName.erase(0, 9);
-			node.m_jointName.erase(node.m_jointName.end() - 25, node.m_jointName.end());
-			ctx->m_anims.push_back(node);
+			// find joint.
+			RenderModel_DAE_SkinJoint* pJoint = nullptr;
+			for (std::vector<RenderModel_DAE_Mesh>::iterator itMesh = ctx->m_meshes.begin(); itMesh != ctx->m_meshes.end() && !pJoint; ++itMesh)
+			{
+				RenderModel_DAE_Mesh& mesh = *itMesh;
+				for (std::vector<RenderModel_DAE_SkinJoint>::iterator itJoint = mesh.m_skinJoints.begin(); itJoint != mesh.m_skinJoints.end() && !pJoint; ++itJoint)
+				{
+					RenderModel_DAE_SkinJoint& joint = *itJoint;
+					if (id.find(joint.m_name.c_str()) == std::string::npos)
+						continue;
 
-			ctx->m_fnParseChars = &__ParseChars_Numbers;
-			ctx->m_fnParseBuffer = &__ParseBuffer_F32;
-			ctx->m_fnParseDataSet = &__ParseDataSet_AnimMatrix;
-			ctx->m_animIndex = 0;
+					pJoint = &joint;
+				}
+			}
+
+			if (pJoint)
+			{
+				ctx->m_anims.emplace_back();
+				RenderModel_DAE_Anim& node = ctx->m_anims.back();
+				node.m_jointName = pJoint->m_name;
+
+				ctx->m_fnParseChars = &__ParseChars_Numbers;
+				ctx->m_fnParseBuffer = &__ParseBuffer_F32;
+				ctx->m_fnParseDataSet = &__ParseDataSet_AnimMatrix;
+				ctx->m_animIndex = 0;
+			}
 		}
 	}
 

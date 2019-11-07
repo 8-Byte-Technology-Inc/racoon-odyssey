@@ -205,6 +205,21 @@ void RenderModel::SetWorldTransform(const Matrix4& transform)
 	__UpdateVSConstants_World();
 }
 
+u32 RenderModel::GetAnimCount() const
+{
+	return !m_anims.empty() ? static_cast<u32>(m_anims.size() - 1) : 0;
+}
+
+const RenderModel_Anim* RenderModel::GetAnim(u32 animID) const
+{
+	for (std::vector<RenderModel_Anim>::const_iterator it = m_anims.begin(); it != m_anims.end(); ++it)
+	{
+		if (it->m_animID == animID)
+			return &(*it);
+	}
+	return nullptr;
+}
+
 void RenderModel::SetAnimID(const s32 animID)
 {
 	if (m_anims.empty())
@@ -213,7 +228,7 @@ void RenderModel::SetAnimID(const s32 animID)
 	m_animIndex = 0;
 
 	s32 index = 0;
-	for (std::vector<RenderModel_Anims>::iterator it = m_anims.begin(); it != m_anims.end(); ++it, ++index)
+	for (std::vector<RenderModel_Anim>::iterator it = m_anims.begin(); it != m_anims.end(); ++it, ++index)
 	{
 		if (it->m_animID <= animID)
 		{
@@ -224,15 +239,31 @@ void RenderModel::SetAnimID(const s32 animID)
 	__UpdateVSConstants_Anim();
 }
 
-void RenderModel::SetJointRotation(u32 index, const Vector3& rotation)
+void RenderModel::SetJointRotation(u32 jointIndex, const Vector3& rotation)
 {
-	assert(index < m_cJoints);
-	if (index == 0)
+	assert(jointIndex < m_cJoints);
+	if (jointIndex == 0)
 		return;
 
-	RenderModel_Joint& joint = m_joints[index];
+	RenderModel_Joint& joint = m_joints[jointIndex];
 
-	joint.m_rotateMatrix.SetRotate(rotation);
+	Matrix4 rotateMatrix;
+	rotateMatrix.SetRotate(rotation);
+
+	joint.m_effectiveMatrix = Matrix4::MultiplyAB(joint.m_baseMatrix, rotateMatrix);
+	joint.m_isDirty = true;
+	m_isJointsDirty = true;
+}
+
+void RenderModel::SetJointTransformMatrix(u32 jointIndex, const Matrix4& transform)
+{
+	assert(jointIndex < m_cJoints);
+	if (jointIndex == 0)
+		return;
+
+	RenderModel_Joint& joint = m_joints[jointIndex];
+
+	joint.m_effectiveMatrix = transform;
 	joint.m_isDirty = true;
 	m_isJointsDirty = true;
 }
@@ -394,16 +425,14 @@ void RenderModel::__UpdateVSConstants_Joints()
 		if (!isNeedsRecompute)
 			continue;
 
-		const Matrix4 matrixJoint = Matrix4::MultiplyAB(src.m_baseMatrix, src.m_rotateMatrix);
-
 		if (src.m_parentIndex >= 0)
 		{
 			const Matrix4& matrixParent = m_joints[src.m_parentIndex].m_computedMatrix;
-			src.m_computedMatrix = Matrix4::MultiplyAB(matrixParent, matrixJoint);
+			src.m_computedMatrix = Matrix4::MultiplyAB(matrixParent, src.m_effectiveMatrix);
 		}
 		else
 		{
-			src.m_computedMatrix = Matrix4::MultiplyAB(m_baseJointMatrix, matrixJoint);
+			src.m_computedMatrix = Matrix4::MultiplyAB(m_baseJointMatrix, src.m_effectiveMatrix);
 		}
 
 		src.m_isDirty = true;
@@ -597,6 +626,27 @@ void RenderModel::__InitializeSquareFromTexture(RenderMain* pRenderer, const Vec
 void RenderModel::__Free()
 {
 	TB8_DEL(this);
+}
+
+const RenderModel_Anim_Joint* RenderModel::__GetAnimJoint(s32 animID, s32 jointIndex)
+{
+	for (std::vector<RenderModel_Anim>::iterator itAnim = m_anims.begin(); itAnim != m_anims.end(); ++itAnim)
+	{
+		const RenderModel_Anim& anim = *itAnim;
+		if (anim.m_animID < animID)
+			continue;
+		if (anim.m_animID != animID)
+			break;
+
+		for (std::vector<RenderModel_Anim_Joint>::const_iterator itJoint = anim.m_joints.begin(); itJoint != anim.m_joints.end(); ++itJoint)
+		{
+			const RenderModel_Anim_Joint& joint = *itJoint;
+			if (joint.m_pJoint->m_index != jointIndex)
+				continue;
+			return &joint;
+		}
+	}
+	return nullptr;
 }
 
 RenderModel_NamedVertex* RenderModel::__FindNamedVertex(const char* name)

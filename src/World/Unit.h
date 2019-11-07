@@ -12,6 +12,8 @@ struct World_Unit : public World_Object
 	World_Unit(Client_Globals* pGlobalState)
 		: World_Object(pGlobalState)
 		, m_mass(0.f)
+		, m_animIndex(0.f)
+		, m_isSitting(true)
 	{
 	}
 
@@ -26,6 +28,9 @@ struct World_Unit : public World_Object
 	f32								m_mass;
 	Vector3							m_force;
 	Vector3							m_velocity;
+
+	f32								m_animIndex;
+	bool							m_isSitting;
 };
 
 }

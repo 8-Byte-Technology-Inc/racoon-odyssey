@@ -65,7 +65,7 @@ void Vector4ToXMVECTOR(const Vector4& src, DirectX::XMVECTOR& dst)
 	dst.m128_f32[0] = src.x;
 	dst.m128_f32[1] = src.y;
 	dst.m128_f32[2] = src.z;
-	dst.m128_f32[3] = src.u;
+	dst.m128_f32[3] = src.w;
 }
 
 void Vector3ToXMVECTOR(const Vector3& src, DirectX::XMVECTOR& dst)

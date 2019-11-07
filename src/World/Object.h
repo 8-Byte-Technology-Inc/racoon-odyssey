@@ -17,6 +17,7 @@ struct World_Object : public Client_Globals_Accessor
 		: Client_Globals_Accessor(pGlobalState)
 		, m_modelID(0)
 		, m_pModel(nullptr)
+		, m_offset()
 		, m_pos()
 		, m_rotation(0.f)
 		, m_scale(0.f)
@@ -38,6 +39,7 @@ struct World_Object : public Client_Globals_Accessor
 
 	u32								m_modelID;
 	RenderModel*					m_pModel;
+	Vector3							m_offset;
 	Vector3							m_pos;
 	f32								m_rotation;
 	f32								m_scale;

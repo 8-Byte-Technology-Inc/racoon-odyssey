@@ -54,6 +54,35 @@ Vector3 operator /(const Vector3& a, f32 b)
 	return Vector3(a.x / b, a.y / b, a.z / b);
 }
 
+Vector4 Vector4::SLERP(const Vector4& qa, const Vector4& qb, f32 t)
+{
+	Vector4 qr;
+	f32 cosAB = Vector4::Dot(qa, qb);
+	if (std::abs(cosAB) >= 1.f)
+		return qa;
+	const f32 sign = get_sign(cosAB);
+	const f32 angleAB = static_cast<f32>(acos(sign * cosAB));
+	const f32 sinAB = static_cast<f32>(sin(angleAB));
+	if (is_approx_zero(std::abs(sinAB)))
+	{
+		qr.x = (1.f - t) * qa.x + sign * t * qb.x;
+		qr.y = (1.f - t) * qa.y + sign * t * qb.y;
+		qr.z = (1.f - t) * qa.z + sign * t * qb.z;
+		qr.w = (1.f - t) * qa.w + sign * t * qb.w;
+	}
+	else
+	{
+		const f32 f_a = static_cast<f32>(sin((1.f - t) * angleAB)) / sinAB;
+		const f32 f_b = static_cast<f32>(sin(t * angleAB)) / sinAB;
+
+		qr.x = f_a * qa.x + sign * f_b * qb.x;
+		qr.y = f_a * qa.y + sign * f_b * qb.y;
+		qr.z = f_a * qa.z + sign * f_b * qb.z;
+		qr.w = f_a * qa.w + sign * f_b * qb.w;
+	}
+	return qr;
+}
+
 IVector2 IVector2::Rotate(s32 deg) const
 {
 	if (deg == 0)
@@ -504,10 +533,21 @@ void Matrix4::SetScale(const Vector3& v)
 void Matrix4::SetTranslation(const Vector3& v)
 {
 	SetIdentity();
+	AddTranslation(v);
+}
 
+void Matrix4::AddTranslation(const Vector3& v)
+{
 	m[3][0] = v.x;
 	m[3][1] = v.y;
 	m[3][2] = v.z;
+}
+
+void Matrix4::GetTranslation(Vector3& v) const
+{
+	v.x = m[3][0];
+	v.y = m[3][1];
+	v.z = m[3][2];
 }
 
 void Matrix4::SetRotate(const Vector3& v)
@@ -567,6 +607,87 @@ void Matrix4::SetRotateZ(const f32 rad)
 	m[1][1] = c;
 	m[2][2] = 1.0f;
 	m[3][3] = 1.0f;
+}
+
+f32 Matrix4::Determinant() const
+{
+	return +m[0][0] * (+m[1][1] * (m[2][2] * m[3][3] - m[2][3] * m[3][2])
+			 		   -m[1][2] * (m[2][1] * m[3][3] - m[2][3] * m[3][1])
+			 		   +m[1][3] * (m[2][1] * m[3][2] - m[2][2] * m[3][1]))
+		   -m[0][1] * (+m[1][0] * (m[2][2] * m[3][3] - m[2][3] * m[3][2])
+					   -m[1][2] * (m[2][0] * m[3][3] - m[2][3] * m[3][0])
+					   +m[1][3] * (m[2][0] * m[3][2] - m[2][2] * m[3][0]))
+		   +m[0][2] * (+m[1][0] * (m[2][1] * m[3][3] - m[2][3] * m[3][1])
+					   -m[1][1] * (m[2][0] * m[3][3] - m[2][3] * m[3][0])
+					   +m[1][3] * (m[2][0] * m[3][1] - m[2][1] * m[3][0]))
+		   -m[0][3] * (+m[1][0] * (m[2][1] * m[3][2] - m[2][2] * m[3][1])
+					   -m[1][1] * (m[2][0] * m[3][2] - m[2][2] * m[3][0])
+					   +m[1][2] * (m[2][0] * m[3][1] - m[2][1] * m[3][0]));
+}
+
+Vector4 Matrix4::ToQuaternion(const Matrix4& m)
+{
+	Vector4 q;
+
+	const f32 tr0 = m.m[0][0];
+	const f32 tr1 = m.m[1][1];
+	const f32 tr2 = m.m[2][2];
+	const f32 tr = tr0 + tr1 + tr2;
+
+	if (tr > 0.f)
+	{
+		const f32 k = 0.5f / static_cast<f32>(sqrt(1.f + tr));
+		q.x = k * (m.m[1][2] - m.m[2][1]);
+		q.y = k * (m.m[2][0] - m.m[0][2]);
+		q.z = k * (m.m[0][1] - m.m[1][0]);
+		q.w = 0.25f / k;
+	}
+	else if ((tr0 > tr1) && (tr0 > tr2))
+	{
+		const f32 k = 0.5f / static_cast<f32>(sqrt(1.f + tr0 - tr1 - tr2));
+		q.x = 0.25f / k;
+		q.y = k * (m.m[1][0] + m.m[0][1]);
+		q.z = k * (m.m[2][0] + m.m[0][2]);
+		q.w = k * (m.m[1][2] - m.m[2][1]);
+	}
+	else if (tr1 > tr2)
+	{
+		const f32 k = 0.5f / static_cast<f32>(sqrt(1.f + tr1 - tr0 - tr2));
+		q.x = k * (m.m[1][0] + m.m[0][1]);
+		q.y = 0.25f / k;
+		q.z = k * (m.m[2][1] + m.m[1][2]);
+		q.w = k * (m.m[2][0] - m.m[0][2]);
+	}
+	else
+	{
+		const f32 k = 0.5f / static_cast<f32>(sqrt(1.f + tr2 - tr0 - tr1));
+		q.x = k * (m.m[2][0] + m.m[0][2]);
+		q.y = k * (m.m[2][1] + m.m[1][2]);
+		q.z = 0.25f / k;
+		q.w = k * (m.m[0][1] - m.m[1][0]);
+	}
+
+	return q;
+}
+
+Matrix4 Matrix4::FromQuaternion(const Vector4& q)
+{
+	Matrix4 m;
+
+	m.m[0][0] = 1.f - 2.f * q.y * q.y - 2.f * q.z * q.z;
+	m.m[0][1] = 2.f * q.x * q.y + 2.f * q.z * q.w;
+	m.m[0][2] = 2.f * q.x * q.z - 2.f * q.y * q.w;
+
+	m.m[1][0] = 2.f * q.x * q.y - 2.f * q.z * q.w;
+	m.m[1][1] = 1.f - 2.f * q.x * q.x - 2.f * q.z * q.z;
+	m.m[1][2] = 2.f * q.y * q.z + 2.f * q.x * q.w;
+
+	m.m[2][0] = 2.f * q.x * q.z + 2.f * q.y * q.w;
+	m.m[2][1] = 2.f * q.y * q.z - 2.f * q.x * q.w;
+	m.m[2][2] = 1.f - 2.f * q.x * q.x - 2.f * q.y * q.y;
+
+	m.m[3][3] = 1.f;
+	return m;
 }
 
 Matrix4& Matrix4::operator *(const Matrix4& b)

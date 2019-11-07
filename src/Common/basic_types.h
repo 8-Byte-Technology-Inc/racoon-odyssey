@@ -114,10 +114,21 @@ struct Vector2
 
 struct Vector4
 {
+	Vector4()
+		: x(0.f)
+		, y(0.f)
+		, z(0.f)
+		, w(0.f)
+	{
+	}
+
+	static Vector4 SLERP(const Vector4& a, const Vector4& b, f32 t);
+	static f32 Dot(const Vector4& a, const Vector4& b) { return (a.x * b.x) + (a.y * b.y) + (a.z * b.z) + (a.w * b.w); }
+
 	float x;
 	float y;
 	float z;
-	float u;
+	float w;
 } ;
 
 struct IVector2
@@ -257,10 +268,13 @@ struct Matrix4
 	void SetIdentity();
 	void SetScale(const Vector3& v);
 	void SetTranslation(const Vector3& v);
+	void AddTranslation(const Vector3& v);
+	void GetTranslation(Vector3& v) const;
 	void SetRotate(const Vector3& v);
 	void SetRotateX(const f32 rad);
 	void SetRotateY(const f32 rad);
 	void SetRotateZ(const f32 rad);
+	f32 Determinant() const;
 
 	static Matrix4 Transpose(const Matrix4& a);
 	static Matrix4 MultiplyBA(const Matrix4& b, const Matrix4& a);
@@ -268,6 +282,8 @@ struct Matrix4
 	static Vector3 MultiplyVector(const Matrix4& a, const Vector3& b);
 	static Vector3 MultiplyVector(const Vector3& a, const Matrix4& b);
 	static Matrix4 ExtractRotation(const Matrix4& a);
+	static Vector4 ToQuaternion(const Matrix4& m);
+	static Matrix4 FromQuaternion(const Vector4& q);
 };
 
 s32 NormalizeRotation(s32 rotation);

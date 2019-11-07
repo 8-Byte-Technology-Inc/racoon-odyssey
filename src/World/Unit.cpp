@@ -2,6 +2,8 @@
 
 #include <cmath>
 
+#include "render/RenderModel.h"
+
 #include "Unit.h"
 
 namespace TB8
@@ -87,16 +89,6 @@ void World_Unit::ComputeNextPosition(s32 frameCount, Vector3& pos, Vector3& vel)
 	// compute new position.
 	pos = m_pos + (vel0 + ((vel1 - vel0) * 0.5f)) * elapsedTime;
 
-	// compute new facing.
-	f32 facing = m_rotation;
-	if (!is_approx_zero(vel1.x) || !is_approx_zero(vel1.y))
-	{
-		Vector2 facingVector(vel1.x, vel1.y);
-		facingVector.Normalize();
-		const f32 angle = std::atan2(facingVector.y, facingVector.x);
-		facing = (angle / DirectX::XM_PI) * 180.f;
-	}
-
 	// can't go lower than 0.
 	if (pos.z < 0.f)
 	{
@@ -115,6 +107,67 @@ void World_Unit::UpdatePosition(const Vector3& pos, const Vector3& vel)
 		facingVector.Normalize();
 		const f32 angle = std::atan2(facingVector.y, facingVector.x);
 		facing = (angle / DirectX::XM_PI) * 180.f;
+	}
+
+	// compute distance traveled.
+	const Vector3 vDist = pos - m_pos;
+	const f32 dist = vDist.Mag();
+
+	// compute new animation.
+	if (!is_approx_zero(dist))
+	{
+		// udpate anim index.
+		m_animIndex += dist;
+		while (m_animIndex > 1.f)
+			m_animIndex -= 1.f;
+
+		// no longer sitting.
+		if (m_isSitting)
+		{
+			m_isSitting = false;
+			m_offset = Vector3(0.f, 0.f, 0.25f);
+			__ComputeModelWorldLocalTransform();
+		}
+
+		// decide which two animations we'll interpolate between.
+		u32 animCount = m_pModel->GetAnimCount();
+		const f32 animRange = static_cast<f32>(animCount);
+		const u32 animIndex0 = static_cast<u32>(m_animIndex * animRange) % animCount;
+		const u32 animIndex1 = (animIndex0 + 1) % animCount;
+		const f32 t = (m_animIndex - (static_cast<f32>(animIndex0) / animRange)) * animRange;
+
+		const RenderModel_Anim* pAnimA = m_pModel->GetAnim(animIndex0 + 1);
+		const RenderModel_Anim* pAnimB = m_pModel->GetAnim(animIndex1 + 1);
+
+		std::vector<RenderModel_Anim_Joint>::const_iterator itJointA = pAnimA->m_joints.begin();
+		std::vector<RenderModel_Anim_Joint>::const_iterator itJointB = pAnimB->m_joints.begin();
+
+		// update any joints that moved.
+		for ( ; itJointA != pAnimA->m_joints.end() && itJointB != pAnimB->m_joints.end(); ++itJointA, ++itJointB)
+		{
+			const RenderModel_Anim_Joint& jointA = *itJointA;
+			const RenderModel_Anim_Joint& jointB = *itJointB;
+
+			const Matrix4& matrixA = jointA.m_transform;
+			const Matrix4& matrixB = jointB.m_transform;
+
+			Vector4 qA = Matrix4::ToQuaternion(matrixA);
+			Vector4 qB = Matrix4::ToQuaternion(matrixB);
+
+			Vector4 qR = Vector4::SLERP(qA, qB, t);
+
+			Matrix4 matrixC = Matrix4::FromQuaternion(qR);
+
+			Vector3 posA;
+			Vector3 posB;
+			matrixA.GetTranslation(posA);
+			matrixB.GetTranslation(posB);
+
+			Vector3 posC = (posA + posB) / 2.f;
+			matrixC.AddTranslation(posC);
+
+			m_pModel->SetJointTransformMatrix(jointA.m_pJoint->m_index, matrixC);
+		}
 	}
 
 	// update position, rotation, velocity.

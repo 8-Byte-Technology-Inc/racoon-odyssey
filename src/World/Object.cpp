@@ -80,7 +80,12 @@ void World_Object::__ComputeModelWorldLocalTransform()
 	matrixCoordsToWorld.m[2][2] = 0.0f;
 	matrixCoordsToWorld.m[1][2] = 1.0f;
 
-	m_worldLocalTransform = matrixCoordsToWorld;
+	// offset.
+	Matrix4 matrixOffset;
+	matrixOffset.SetTranslation(m_offset);
+
+	m_worldLocalTransform = matrixOffset;
+	m_worldLocalTransform = Matrix4::MultiplyAB(m_worldLocalTransform, matrixCoordsToWorld);
 	m_worldLocalTransform = Matrix4::MultiplyAB(m_worldLocalTransform, matrixScale);
 	m_worldLocalTransform = Matrix4::MultiplyAB(m_worldLocalTransform, matrixCenter);
 }

@@ -51,6 +51,8 @@ struct RenderModel_Joint
 	{
 	}
 
+	std::string						m_name;
+
 	s32								m_index;
 	s32								m_parentIndex;
 
@@ -58,15 +60,23 @@ struct RenderModel_Joint
 	Matrix4							m_baseInvBindMatrix;
 
 	bool							m_isDirty;
-	Matrix4							m_rotateMatrix;
+	Matrix4							m_effectiveMatrix;
 	Matrix4							m_computedMatrix;
 };
 
-struct RenderModel_Anims
+struct RenderModel_Anim_Joint
 {
-	s32								m_animIndex;
-	s32								m_animID;
-	f32								m_animTime;
+	RenderModel_Joint*						m_pJoint;
+	Matrix4									m_transform;
+};
+
+struct RenderModel_Anim
+{
+	s32										m_animIndex;
+	s32										m_animID;
+	f32										m_animTime;
+
+	std::vector<RenderModel_Anim_Joint>		m_joints;
 };
 
 class RenderModel : public ref_count
@@ -85,12 +95,15 @@ public:
 	void SetWorldTransform(const Matrix4& transform);
 	const Matrix4& GetWorldTransform() const { return m_worldTransform; }
 
-	const std::vector<RenderModel_Anims>& GetAnims() const { return m_anims; }
+	const std::vector<RenderModel_Anim>& GetAnims() const { return m_anims; }
+	u32 GetAnimCount() const;
+	const RenderModel_Anim* GetAnim(u32 animID) const;
 	const std::vector<RenderModel_Mesh>& GetMeshes() const { return m_meshes; }
 	void SetAnimID(const s32 animID);
 
 	u32 GetJointCount() const { return m_cJoints; }
-	void SetJointRotation(u32 boneIndex, const Vector3& rotation);
+	void SetJointRotation(u32 jointIndex, const Vector3& rotation);
+	void SetJointTransformMatrix(u32 jointIndex, const Matrix4& rotation);
 
 	void GetNamedVerticies(std::vector<RenderModel_NamedVertex>* pVerticies) const;
 
@@ -108,12 +121,13 @@ private:
 	void __UpdateVSConstants_Anim();
 	void __UpdateVSConstants_Joints();
 	RenderModel_NamedVertex* __FindNamedVertex(const char* name);
+	const RenderModel_Anim_Joint* __GetAnimJoint(s32 animID, s32 jointIndex);
 
 	// DAE helpers.
 	void __CheckVertexOrder(RenderModel_DAE_ParseContext& parseContext, RenderModel_DAE_Mesh& mesh, RenderModel_DAE_Triangle& triangle);
 	Matrix4 __ComputeJointModelTransform(RenderModel_DAE_ParseContext& parseContext, RenderModel_DAE_SkinJoint& joint, s32 animID);
 	RenderModel_DAE_Anim_Transform* __LookupAnimTransform(RenderModel_DAE_ParseContext& parseContext, const char* jointName, s32 animID);
-	void __SetBoneTextureData(RenderModel_DAE_ParseContext& parseContext, f32* pBoneTextureData, const IVector2& boneTextureSize, const RenderModel_Anims& anim);
+	void __SetBoneTextureData(RenderModel_DAE_ParseContext& parseContext, f32* pBoneTextureData, const IVector2& boneTextureSize, const RenderModel_Anim& anim);
 	void __UpdateLimits(RenderModel_DAE_Mesh& mesh, const Vector3& src);
 
 	static void __ParseDAEStartElement(void *ctx, const u8* name, const u8** atts);
@@ -174,7 +188,7 @@ private:
 
 	Vector3									m_center;
 
-	std::vector<RenderModel_Anims>			m_anims;
+	std::vector<RenderModel_Anim>			m_anims;
 	s32										m_animIndex;
 	ID3D11ShaderResourceView*				m_pBoneTexture;
 
