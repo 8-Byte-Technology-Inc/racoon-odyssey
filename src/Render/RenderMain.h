@@ -45,6 +45,8 @@ public:
 	ID3D11RenderTargetView* GetRenderTarget() { return m_pRenderTarget; }
 	ID3D11DepthStencilView* GetDepthStencil() { return m_pDepthStencilView; }
 	IWICImagingFactory*		GetWICFactory() { return m_wicFactory; }
+	ID2D1Factory1*			GetD2DFactory() { return m_pD2DFactory; }
+	ID2D1DeviceContext*		GetD2DDeviceContext() { return m_pD2DDeviceContext; }
 
 	void BeginUpdate();
 	void EndUpdate();

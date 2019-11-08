@@ -213,9 +213,11 @@ void MainClass::__ProcessRenderFrame(s32 frameCount)
 
 	m_pRenderer->BeginUpdate();
 
-	m_pWorld->Render(m_pRenderer);
+	m_pWorld->Render3D(m_pRenderer);
 
 	m_pRenderer->BeginDraw();
+
+	m_pWorld->Render2D(m_pRenderer);
 
 	m_pRenderer->DrawCursor();
 

@@ -11,6 +11,7 @@
 
 #include "render/RenderMain.h"
 #include "render/RenderModel.h"
+#include "render/RenderImagine.h"
 
 #include "Object.h"
 #include "Unit.h"
@@ -24,6 +25,7 @@ const f32 TILES_PER_METER = 1.0f;
 World::World(Client_Globals* pGlobalState)
 	: Client_Globals_Accessor(pGlobalState)
 	, m_pCharacterObj(nullptr)
+	, m_pImagine(nullptr)
 {
 }
 
@@ -100,9 +102,8 @@ void World::Update(s32 frameCount)
 	m_pCharacterObj->UpdatePosition(frameCount, pos, vel);
 }
 
-void World::Render(RenderMain* pRenderer)
+void World::Render3D(RenderMain* pRenderer)
 {
-
 	// draw all the tiles that might be on-screen.
 	const Vector2& screenSizeWorld = pRenderer->GetRenderScreenSizeWorld();
 
@@ -135,11 +136,24 @@ void World::Render(RenderMain* pRenderer)
 	}
 }
 
+void World::Render2D(RenderMain* pRenderer)
+{
+	// render imagine buble.
+	if (m_pImagine)
+	{
+		m_pImagine->Render();
+	}
+}
+
 void World::__Initialize()
 {
 	// register for events.
 	__GetEventQueue()->RegisterForMessage(EventModuleID_World, EventMessageID_MoveStart, std::bind(&World::__EventHandler, this, std::placeholders::_1));
 	__GetEventQueue()->RegisterForMessage(EventModuleID_World, EventMessageID_MoveEnd, std::bind(&World::__EventHandler, this, std::placeholders::_1));
+
+	m_pImagine = RenderImagine::Alloc(__GetRenderer());
+	m_pImagine->SetSize(IVector2(300, 200));
+	m_pImagine->SetPosition(IVector2(200, 200));
 }
 
 void World::__Uninitialize()

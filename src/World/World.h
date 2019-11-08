@@ -13,6 +13,7 @@ namespace TB8
 struct World_Object;
 struct World_Unit;
 class RenderModel;
+class RenderImagine;
 
 class World : public Client_Globals_Accessor
 {
@@ -27,7 +28,8 @@ public:
 	void LoadCharacter(const char* pszCharacterModelPath, const char* pszModelName);
 
 	void Update(s32 frameCount);
-	void Render(RenderMain* pRenderer);
+	void Render3D(RenderMain* pRenderer);
+	void Render2D(RenderMain* pRenderer);
 
 protected:
 	void __Initialize();
@@ -52,6 +54,7 @@ protected:
 	std::multimap<IVector2, World_Object*>		m_objects;
 
 	World_Unit*									m_pCharacterObj;
+	RenderImagine*								m_pImagine;
 };
 
 

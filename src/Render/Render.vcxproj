@@ -37,6 +37,7 @@
   <ItemGroup>
     <ClInclude Include="pch.h" />
     <ClInclude Include="RenderHelper.h" />
+    <ClInclude Include="RenderImagine.h" />
     <ClInclude Include="RenderMain.h" />
     <ClInclude Include="RenderModel.h" />
     <ClInclude Include="RenderScale.h" />
@@ -48,6 +49,7 @@
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="RenderHelper.cpp" />
+    <ClCompile Include="RenderImagine.cpp" />
     <ClCompile Include="RenderMain.cpp" />
     <ClCompile Include="RenderModel.cpp" />
     <ClCompile Include="RenderModel_DAE.cpp" />
