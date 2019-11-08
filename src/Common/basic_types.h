@@ -77,6 +77,7 @@ struct Vector3
 	{
 	}
 	bool operator ==(const Vector3& rhs) const { return x == rhs.x && y == rhs.y && z == rhs.z; }
+	Vector3& operator += (const Vector3& rhs) { x += rhs.x; y += rhs.y; z += rhs.z; return *this; }
 	f32 MagSq() const { return x * x + y * y + z * z; }
 	f32 Mag() const { return static_cast<f32>(sqrt(MagSq())); }
 	static f32 Dot(const Vector3& a, const Vector3& b) { return (a.x * b.x) + (a.y * b.y) + (a.z * b.z); }

@@ -9,15 +9,23 @@
 namespace TB8
 {
 
+const s32 SITTING_FRAME_MAX = 30;
+
 World_Unit* World_Unit::Alloc(Client_Globals* pGlobalState)
 {
 	World_Unit* pObj = TB8_NEW(World_Unit)(pGlobalState);
+	pObj->__Initialize();
 	return pObj;
 }
 
 void World_Unit::Free()
 {
 	TB8_DEL(this);
+}
+
+void World_Unit::__Initialize()
+{
+	m_sittingFrame = SITTING_FRAME_MAX;
 }
 
 void World_Unit::ComputeNextPosition(s32 frameCount, Vector3& pos, Vector3& vel)
@@ -97,7 +105,7 @@ void World_Unit::ComputeNextPosition(s32 frameCount, Vector3& pos, Vector3& vel)
 	}
 }
 
-void World_Unit::UpdatePosition(const Vector3& pos, const Vector3& vel)
+void World_Unit::UpdatePosition(s32 frameCount, const Vector3& pos, const Vector3& vel)
 {
 	// compute new facing.
 	f32 facing = m_rotation;
@@ -116,18 +124,34 @@ void World_Unit::UpdatePosition(const Vector3& pos, const Vector3& vel)
 	// compute new animation.
 	if (!is_approx_zero(dist))
 	{
+		if (m_sittingFrame > 0)
+		{
+			m_sittingFrame -= (frameCount * 2);
+
+			if (m_sittingFrame > 0)
+			{
+				u32 animCount = m_pModel->GetAnimCount();
+				const f32 animRange = static_cast<f32>(animCount);
+				const u32 animIndex0 = static_cast<u32>(m_animIndex * animRange) % animCount;
+				const f32 t = static_cast<f32>(SITTING_FRAME_MAX - m_sittingFrame) / static_cast<f32>(SITTING_FRAME_MAX);
+
+				__InterpolateAnims(-1, 1, t);
+				__InterpolateCenterAndSize(-1, 1, t);
+				__ComputeModelWorldLocalTransform();
+				return;
+			}
+
+			m_sittingFrame = 0;
+			m_animIndex = 0.f;
+
+			__ComputeModelAnimCenterAndSize(1);
+			__ComputeModelWorldLocalTransform();
+		}
+
 		// udpate anim index.
 		m_animIndex += dist;
 		while (m_animIndex > 1.f)
 			m_animIndex -= 1.f;
-
-		// no longer sitting.
-		if (m_isSitting)
-		{
-			m_isSitting = false;
-			m_offset = Vector3(0.f, 0.f, 0.25f);
-			__ComputeModelWorldLocalTransform();
-		}
 
 		// decide which two animations we'll interpolate between.
 		u32 animCount = m_pModel->GetAnimCount();
@@ -136,38 +160,32 @@ void World_Unit::UpdatePosition(const Vector3& pos, const Vector3& vel)
 		const u32 animIndex1 = (animIndex0 + 1) % animCount;
 		const f32 t = (m_animIndex - (static_cast<f32>(animIndex0) / animRange)) * animRange;
 
-		const RenderModel_Anim* pAnimA = m_pModel->GetAnim(animIndex0 + 1);
-		const RenderModel_Anim* pAnimB = m_pModel->GetAnim(animIndex1 + 1);
+		__InterpolateAnims(animIndex0 + 1, animIndex1 + 1, t);
+	}
+	else if (m_sittingFrame < SITTING_FRAME_MAX)
+	{
+		// no longer moving, sit down.
+		m_sittingFrame += frameCount;
 
-		std::vector<RenderModel_Anim_Joint>::const_iterator itJointA = pAnimA->m_joints.begin();
-		std::vector<RenderModel_Anim_Joint>::const_iterator itJointB = pAnimB->m_joints.begin();
-
-		// update any joints that moved.
-		for ( ; itJointA != pAnimA->m_joints.end() && itJointB != pAnimB->m_joints.end(); ++itJointA, ++itJointB)
+		if (m_sittingFrame < SITTING_FRAME_MAX)
 		{
-			const RenderModel_Anim_Joint& jointA = *itJointA;
-			const RenderModel_Anim_Joint& jointB = *itJointB;
+			u32 animCount = m_pModel->GetAnimCount();
+			const f32 animRange = static_cast<f32>(animCount);
+			const u32 animIndex0 = static_cast<u32>(m_animIndex * animRange) % animCount;
+			const f32 t = static_cast<f32>(m_sittingFrame) / static_cast<f32>(SITTING_FRAME_MAX);
 
-			const Matrix4& matrixA = jointA.m_transform;
-			const Matrix4& matrixB = jointB.m_transform;
-
-			Vector4 qA = Matrix4::ToQuaternion(matrixA);
-			Vector4 qB = Matrix4::ToQuaternion(matrixB);
-
-			Vector4 qR = Vector4::SLERP(qA, qB, t);
-
-			Matrix4 matrixC = Matrix4::FromQuaternion(qR);
-
-			Vector3 posA;
-			Vector3 posB;
-			matrixA.GetTranslation(posA);
-			matrixB.GetTranslation(posB);
-
-			Vector3 posC = (posA + posB) / 2.f;
-			matrixC.AddTranslation(posC);
-
-			m_pModel->SetJointTransformMatrix(jointA.m_pJoint->m_index, matrixC);
+			__InterpolateAnims(animIndex0 + 1, -1, t);
+			__InterpolateCenterAndSize(animIndex0 + 1, -1, t);
+			__ComputeModelWorldLocalTransform();
+			return;
 		}
+
+		m_sittingFrame = SITTING_FRAME_MAX;
+		m_animIndex = 0.f;
+
+		__SetAnim(-1);
+		__ComputeModelAnimCenterAndSize(-1);
+		__ComputeModelWorldLocalTransform();
 	}
 
 	// update position, rotation, velocity.

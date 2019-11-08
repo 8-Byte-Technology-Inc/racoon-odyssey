@@ -184,8 +184,6 @@ struct RenderModel_DAE_Triangle
 struct RenderModel_DAE_Mesh
 {
 	RenderModel_DAE_Mesh()
-		: m_min(FLT_MAX, FLT_MAX, FLT_MAX)
-		, m_max(-FLT_MAX, -FLT_MAX, -FLT_MAX)
 	{
 	}
 
@@ -193,8 +191,7 @@ struct RenderModel_DAE_Mesh
 	std::string								m_id;
 	std::string								m_skinName;
 
-	Vector3									m_min;
-	Vector3									m_max;
+	RenderModel_Bounds						m_bounds;
 
 	std::vector<RenderModel_DAE_Vertex>		m_meshVerticies;
 	std::vector<Vector3>					m_meshNormals;
@@ -329,11 +326,12 @@ void RenderModel::__InitializeFromDAE(RenderMain* pRenderer, const char* path, c
 	const RenderModel_NamedVertex* pCenterVertex = RenderModel::__FindNamedVertex("Base_Center");
 	if (pCenterVertex)
 	{
-		m_center = Vector3(pCenterVertex->m_vertex.x, pCenterVertex->m_vertex.y, (primaryMesh.m_min.z + primaryMesh.m_max.z) / 2.f);
+		m_center = Vector3(pCenterVertex->m_vertex.x, pCenterVertex->m_vertex.y, (primaryMesh.m_bounds.m_min.z + primaryMesh.m_bounds.m_max.z) / 2.f);
 	}
 	else
 	{
-		m_center = Vector3((primaryMesh.m_min.x + primaryMesh.m_max.x) / 2.f, (primaryMesh.m_min.y + primaryMesh.m_max.y) / 2.f, (primaryMesh.m_min.z + primaryMesh.m_max.z) / 2.f);
+		primaryMesh.m_bounds.ComputeCenterAndSize();
+		m_center = primaryMesh.m_bounds.m_center;
 	}
 
 	// set up coordinate translation.
@@ -368,19 +366,19 @@ void RenderModel::__InitializeFromDAE(RenderMain* pRenderer, const char* path, c
 		m_meshes.emplace_back();
 		RenderModel_Mesh& dstMesh = m_meshes.back();
 
-		const Vector3 vmin = Matrix4::MultiplyVector(srcMesh.m_min, m_coordTranslate);
-		const Vector3 vmax = Matrix4::MultiplyVector(srcMesh.m_max, m_coordTranslate);
+		const Vector3 vmin = Matrix4::MultiplyVector(srcMesh.m_bounds.m_min, m_coordTranslate);
+		const Vector3 vmax = Matrix4::MultiplyVector(srcMesh.m_bounds.m_max, m_coordTranslate);
 
 		dstMesh.m_name = srcMesh.m_name;
 
-		dstMesh.m_min.x = std::min<f32>(vmin.x, vmax.x);
-		dstMesh.m_min.y = std::min<f32>(vmin.y, vmax.y);
-		dstMesh.m_min.z = std::min<f32>(vmin.z, vmax.z);
-		dstMesh.m_max.x = std::max<f32>(vmin.x, vmax.x);
-		dstMesh.m_max.y = std::max<f32>(vmin.y, vmax.y);
-		dstMesh.m_max.z = std::max<f32>(vmin.z, vmax.z);
+		dstMesh.m_bounds.m_min.x = std::min<f32>(vmin.x, vmax.x);
+		dstMesh.m_bounds.m_min.y = std::min<f32>(vmin.y, vmax.y);
+		dstMesh.m_bounds.m_min.z = std::min<f32>(vmin.z, vmax.z);
+		dstMesh.m_bounds.m_max.x = std::max<f32>(vmin.x, vmax.x);
+		dstMesh.m_bounds.m_max.y = std::max<f32>(vmin.y, vmax.y);
+		dstMesh.m_bounds.m_max.z = std::max<f32>(vmin.z, vmax.z);
 
-		dstMesh.m_size = Vector3(dstMesh.m_max.x - dstMesh.m_min.x, dstMesh.m_max.y - dstMesh.m_min.y, dstMesh.m_max.z - dstMesh.m_min.z);
+		dstMesh.m_bounds.ComputeCenterAndSize();
 	}
 
 	// get a reference to the shader.
@@ -432,6 +430,9 @@ void RenderModel::__InitializeFromDAE(RenderMain* pRenderer, const char* path, c
 			anim.m_animIndex = static_cast<s32>(m_anims.size()) - 1;
 			anim.m_animID = -1;
 			anim.m_animTime = -1.f;
+
+			RenderModel_Mesh& mesh = m_meshes.front();
+			anim.m_bounds = mesh.m_bounds;
 		}
 
 		for (std::map<f32, s32>::iterator it = userCtx.m_animIDMap.begin(); it != userCtx.m_animIDMap.end(); ++it)
@@ -456,6 +457,55 @@ void RenderModel::__InitializeFromDAE(RenderMain* pRenderer, const char* path, c
 			}
 		}
 	}
+
+	// compute animation limits.
+	for (std::vector<RenderModel_Anim>::iterator itAnim = m_anims.begin(); itAnim != m_anims.end(); ++itAnim)
+	{
+		RenderModel_Anim& anim = *itAnim;
+
+		// reset to base transforms.
+		ResetJointTransformMatricies();
+
+		// update joint transforms for this animation.
+		for (std::vector<RenderModel_Anim_Joint>::iterator itJoint = anim.m_joints.begin(); itJoint != anim.m_joints.end(); ++itJoint)
+		{
+			RenderModel_Anim_Joint& animJoint = *itJoint;
+			RenderModel_Joint& joint = *(animJoint.m_pJoint);
+			joint.m_effectiveMatrix = animJoint.m_transform;
+			joint.m_isDirty = true;
+		}
+
+		// apply transforms.
+		__UpdateJointMatricies();
+
+		// go thru verticies, compute limits.
+		for (std::vector<RenderModel_DAE_Mesh>::iterator itMesh = userCtx.m_meshes.begin(); itMesh != userCtx.m_meshes.end(); ++itMesh)
+		{
+			RenderModel_DAE_Mesh& mesh = *itMesh;
+
+			for (std::vector<RenderModel_DAE_Vertex>::const_iterator itVert = mesh.m_meshVerticies.begin(); itVert != mesh.m_meshVerticies.end(); ++itVert)
+			{
+				const RenderModel_DAE_Vertex& srcVertex = *itVert;
+				const Vector3& srcV = srcVertex.m_pos;
+				Vector3 dstV;
+				for (std::vector<RenderModel_DAE_Vertex_SkinJointWeight>::const_iterator itWeight = srcVertex.m_weights.begin(); itWeight != srcVertex.m_weights.end(); ++itWeight)
+				{
+					const RenderModel_DAE_Vertex_SkinJointWeight& srcWeight = *itWeight;
+					const RenderModel_Joint& joint = m_joints[srcWeight.m_jointIndex];
+					const Vector3 dstVComp = Matrix4::MultiplyVector(srcV, joint.m_boundMatrix) * srcWeight.m_weight;
+					dstV += dstVComp;
+				}
+
+				const Vector3 dstVDX = Matrix4::MultiplyVector(dstV, m_coordTranslate);
+				anim.m_bounds.AddVector(dstVDX);
+			}
+		}
+
+		anim.m_bounds.ComputeCenterAndSize();
+	}
+
+	// reset to base transforms.
+	ResetJointTransformMatricies();
 
 	// setup bone texture.
 	if (!m_anims.empty())
@@ -707,31 +757,31 @@ void RenderModel::__InitializeFromDAE(RenderMain* pRenderer, const char* path, c
 	{
 		RenderModel_NamedVertex nv1;
 		nv1.m_name = "Base_Center";
-		nv1.m_vertex = Vector3(m_center.x, m_center.y, primaryMesh.m_min.z);
+		nv1.m_vertex = Vector3(m_center.x, m_center.y, primaryMesh.m_bounds.m_min.z);
 		m_namedVerticies.push_back(nv1);
 	}
 	{
 		RenderModel_NamedVertex nv1;
 		nv1.m_name = "Base_UL";
-		nv1.m_vertex = Vector3(primaryMesh.m_max.x, primaryMesh.m_min.y, primaryMesh.m_min.z);
+		nv1.m_vertex = Vector3(primaryMesh.m_bounds.m_max.x, primaryMesh.m_bounds.m_min.y, primaryMesh.m_bounds.m_min.z);
 		m_namedVerticies.push_back(nv1);
 	}
 	{
 		RenderModel_NamedVertex nv1;
 		nv1.m_name = "Base_UR";
-		nv1.m_vertex = Vector3(primaryMesh.m_min.x, primaryMesh.m_min.y, primaryMesh.m_min.z);
+		nv1.m_vertex = Vector3(primaryMesh.m_bounds.m_min.x, primaryMesh.m_bounds.m_min.y, primaryMesh.m_bounds.m_min.z);
 		m_namedVerticies.push_back(nv1);
 	}
 	{
 		RenderModel_NamedVertex nv1;
 		nv1.m_name = "Base_LL";
-		nv1.m_vertex = Vector3(primaryMesh.m_max.x, primaryMesh.m_max.y, primaryMesh.m_min.z);
+		nv1.m_vertex = Vector3(primaryMesh.m_bounds.m_max.x, primaryMesh.m_bounds.m_max.y, primaryMesh.m_bounds.m_min.z);
 		m_namedVerticies.push_back(nv1);
 	}
 	{
 		RenderModel_NamedVertex nv1;
 		nv1.m_name = "Base_LR";
-		nv1.m_vertex = Vector3(primaryMesh.m_min.x, primaryMesh.m_max.y, primaryMesh.m_min.z);
+		nv1.m_vertex = Vector3(primaryMesh.m_bounds.m_min.x, primaryMesh.m_bounds.m_max.y, primaryMesh.m_bounds.m_min.z);
 		m_namedVerticies.push_back(nv1);
 	}
 
@@ -792,18 +842,6 @@ void RenderModel::__InitializeFromDAE(RenderMain* pRenderer, const char* path, c
 
 	// init constant buffer.
 	__InitVSConstantBuffers();
-}
-
-void RenderModel::__UpdateLimits(RenderModel_DAE_Mesh& mesh, const Vector3& src)
-{
-	mesh.m_min.x = std::min<f32>(mesh.m_min.x, src.x);
-	mesh.m_max.x = std::max<f32>(mesh.m_max.x, src.x);
-
-	mesh.m_min.y = std::min<f32>(mesh.m_min.y, src.y);
-	mesh.m_max.y = std::max<f32>(mesh.m_max.y, src.y);
-
-	mesh.m_min.z = std::min<f32>(mesh.m_min.z, src.z);
-	mesh.m_max.z = std::max<f32>(mesh.m_max.z, src.z);
 }
 
 void RenderModel::__SetBoneTextureData(RenderModel_DAE_ParseContext& parseContext, f32* pBoneTextureData, const IVector2& boneTextureSize, const RenderModel_Anim& anim)
@@ -1655,8 +1693,7 @@ void RenderModel::__ParseDataSet_MeshVertex(RenderModel_DAE_ParseContext* ctx)
 		vertex.m_pos.z = ctx->m_f32[2];
 
 		// update min/max.
-		ctx->m_pModel->__UpdateLimits(*(ctx->m_pMesh), vertex.m_pos);
-
+		ctx->m_pMesh->m_bounds.AddVector(vertex.m_pos);
 		ctx->m_pMesh->m_meshVerticies.push_back(vertex);
 		ctx->m_f32.clear();
 	}

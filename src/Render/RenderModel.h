@@ -34,12 +34,27 @@ struct RenderModel_NamedVertex
 	Vector3 m_vertex;
 };
 
+struct RenderModel_Bounds
+{
+	RenderModel_Bounds()
+		: m_min(FLT_MAX, FLT_MAX, FLT_MAX)
+		, m_max(-FLT_MAX, -FLT_MAX, -FLT_MAX)
+	{
+	}
+
+	void AddVector(const Vector3& v);
+	void ComputeCenterAndSize();
+
+	Vector3							m_min;
+	Vector3							m_max;
+	Vector3							m_center;
+	Vector3							m_size;
+};
+
 struct RenderModel_Mesh
 {
 	std::string						m_name;
-	Vector3							m_min;
-	Vector3							m_max;
-	Vector3							m_size;
+	RenderModel_Bounds				m_bounds;
 };
 
 struct RenderModel_Joint
@@ -62,6 +77,7 @@ struct RenderModel_Joint
 	bool							m_isDirty;
 	Matrix4							m_effectiveMatrix;
 	Matrix4							m_computedMatrix;
+	Matrix4							m_boundMatrix;
 };
 
 struct RenderModel_Anim_Joint
@@ -72,9 +88,18 @@ struct RenderModel_Anim_Joint
 
 struct RenderModel_Anim
 {
+	RenderModel_Anim()
+		: m_animIndex(-1)
+		, m_animID(-1)
+		, m_animTime(0.f)
+	{
+	}
+
 	s32										m_animIndex;
 	s32										m_animID;
 	f32										m_animTime;
+
+	RenderModel_Bounds						m_bounds;
 
 	std::vector<RenderModel_Anim_Joint>		m_joints;
 };
@@ -94,6 +119,8 @@ public:
 	void SetScale(const Vector3& scale);
 	void SetWorldTransform(const Matrix4& transform);
 	const Matrix4& GetWorldTransform() const { return m_worldTransform; }
+	const Vector3& GetCenter() const { return m_meshes.front().m_bounds.m_center; }
+	const Vector3& GetSize() const { return m_meshes.front().m_bounds.m_size; }
 
 	const std::vector<RenderModel_Anim>& GetAnims() const { return m_anims; }
 	u32 GetAnimCount() const;
@@ -103,7 +130,10 @@ public:
 
 	u32 GetJointCount() const { return m_cJoints; }
 	void SetJointRotation(u32 jointIndex, const Vector3& rotation);
+	void ResetJointTransformMatricies();
 	void SetJointTransformMatrix(u32 jointIndex, const Matrix4& rotation);
+	const RenderModel_Joint* GetJoint(s32 jointIndex) { return &(m_joints[jointIndex]); }
+	const RenderModel_Anim_Joint* GetAnimJoint(s32 animID, s32 jointIndex) { return __GetAnimJoint(animID, jointIndex); }
 
 	void GetNamedVerticies(std::vector<RenderModel_NamedVertex>* pVerticies) const;
 
@@ -120,6 +150,7 @@ private:
 	void __UpdateVSConstants_World();
 	void __UpdateVSConstants_Anim();
 	void __UpdateVSConstants_Joints();
+	void __UpdateJointMatricies();
 	RenderModel_NamedVertex* __FindNamedVertex(const char* name);
 	const RenderModel_Anim_Joint* __GetAnimJoint(s32 animID, s32 jointIndex);
 
@@ -128,7 +159,6 @@ private:
 	Matrix4 __ComputeJointModelTransform(RenderModel_DAE_ParseContext& parseContext, RenderModel_DAE_SkinJoint& joint, s32 animID);
 	RenderModel_DAE_Anim_Transform* __LookupAnimTransform(RenderModel_DAE_ParseContext& parseContext, const char* jointName, s32 animID);
 	void __SetBoneTextureData(RenderModel_DAE_ParseContext& parseContext, f32* pBoneTextureData, const IVector2& boneTextureSize, const RenderModel_Anim& anim);
-	void __UpdateLimits(RenderModel_DAE_Mesh& mesh, const Vector3& src);
 
 	static void __ParseDAEStartElement(void *ctx, const u8* name, const u8** atts);
 	static void __ParseDAECharacters(void *ctx, const u8* value, int len);

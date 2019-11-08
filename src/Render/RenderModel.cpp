@@ -14,6 +14,24 @@
 namespace TB8
 {
 
+void RenderModel_Bounds::AddVector(const Vector3& v)
+{
+	m_min.x = std::min<f32>(m_min.x, v.x);
+	m_max.x = std::max<f32>(m_max.x, v.x);
+
+	m_min.y = std::min<f32>(m_min.y, v.y);
+	m_max.y = std::max<f32>(m_max.y, v.y);
+
+	m_min.z = std::min<f32>(m_min.z, v.z);
+	m_max.z = std::max<f32>(m_max.z, v.z);
+}
+
+void RenderModel_Bounds::ComputeCenterAndSize()
+{
+	m_center = Vector3((m_max.x + m_min.x) / 2.f, (m_max.y + m_min.y) / 2.f, (m_max.z + m_min.z) / 2.f);
+	m_size = Vector3(m_max.x - m_min.x, m_max.y - m_min.y, m_max.z - m_min.z);
+}
+
 RenderModel::RenderModel(RenderMain* pRenderer)
 	: ref_count()
 	, m_pRenderer(pRenderer)
@@ -255,6 +273,18 @@ void RenderModel::SetJointRotation(u32 jointIndex, const Vector3& rotation)
 	m_isJointsDirty = true;
 }
 
+void RenderModel::ResetJointTransformMatricies()
+{
+	// reset to base transforms.
+	for (u32 i = 0; i < m_cJoints; ++i)
+	{
+		RenderModel_Joint& joint = m_joints[i];
+		joint.m_effectiveMatrix = joint.m_baseMatrix;
+		joint.m_isDirty = true;
+	}
+	m_isJointsDirty = true;
+}
+
 void RenderModel::SetJointTransformMatrix(u32 jointIndex, const Matrix4& transform)
 {
 	assert(jointIndex < m_cJoints);
@@ -404,18 +434,8 @@ void RenderModel::__UpdateVSConstants_Anim()
 	m_pRenderer->GetDeviceContext()->Unmap(m_pVSConstantBuffer_Anim, 0);
 }
 
-void RenderModel::__UpdateVSConstants_Joints()
+void RenderModel::__UpdateJointMatricies()
 {
-	HRESULT hr = S_OK;
-
-	// Lock the constant buffer so it can be written to.
-	D3D11_MAPPED_SUBRESOURCE mappedResource;
-	hr = m_pRenderer->GetDeviceContext()->Map(m_pVSConstantBuffer_Joints, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
-	assert(hr == S_OK);
-
-	// Get a pointer to the data in the constant buffer.
-	RenderShaders_Model_VSConstantants_Joints* dataPtr = reinterpret_cast<RenderShaders_Model_VSConstantants_Joints*>(mappedResource.pData);
-
 	// update computed matricies for dirty joints and their children.
 	for (u32 i = 0; i < m_cJoints; ++i)
 	{
@@ -435,35 +455,55 @@ void RenderModel::__UpdateVSConstants_Joints()
 			src.m_computedMatrix = Matrix4::MultiplyAB(m_baseJointMatrix, src.m_effectiveMatrix);
 		}
 
+		src.m_boundMatrix = Matrix4::MultiplyAB(src.m_computedMatrix, src.m_baseInvBindMatrix);
 		src.m_isDirty = true;
 	}
+
+	// mark everything as not dirty.
+	for (u32 i = 0; i < m_cJoints; ++i)
+	{
+		RenderModel_Joint& src = m_joints[i];
+		src.m_isDirty = false;
+	}
+}
+
+void RenderModel::__UpdateVSConstants_Joints()
+{
+	HRESULT hr = S_OK;
+
+	// Lock the constant buffer so it can be written to.
+	D3D11_MAPPED_SUBRESOURCE mappedResource;
+	hr = m_pRenderer->GetDeviceContext()->Map(m_pVSConstantBuffer_Joints, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+	assert(hr == S_OK);
+
+	// Get a pointer to the data in the constant buffer.
+	RenderShaders_Model_VSConstantants_Joints* dataPtr = reinterpret_cast<RenderShaders_Model_VSConstantants_Joints*>(mappedResource.pData);
+
+	// update computed matricies for dirty joints and their children.
+	__UpdateJointMatricies();
 
 	// apply matricies to constants.
 	for (u32 i = 0; i < m_cJoints; ++i)
 	{
 		RenderModel_Joint& src = m_joints[i];
 
-		Matrix4 matrixBound = Matrix4::MultiplyAB(src.m_computedMatrix, src.m_baseInvBindMatrix);
-
 		// compute matrix to apply to verticies.
 		{
 			DirectX::XMMATRIX worldMatrix1;
-			Matrix4ToXMMATRIX(matrixBound, worldMatrix1);
+			Matrix4ToXMMATRIX(src.m_boundMatrix, worldMatrix1);
 			DirectX::XMMATRIX worldMatrix2 = DirectX::XMMatrixTranspose(worldMatrix1);
 			DirectX::XMStoreFloat4x4(&(dataPtr->jointMatrix[i]), worldMatrix2);
 		}
 
 		// compute matrix to apply to vertex normals.
 		{
-			const Matrix4 matrixNormal1 = Matrix4::ExtractRotation(matrixBound);
+			const Matrix4 matrixNormal1 = Matrix4::ExtractRotation(src.m_boundMatrix);
 			DirectX::XMMATRIX matrixNormal2;
 			Matrix4ToXMMATRIX(matrixNormal1, matrixNormal2);
 			DirectX::XMMATRIX matrixNormal3 = DirectX::XMMatrixInverse(nullptr, matrixNormal2);
 			DirectX::XMMATRIX matrixNormal4 = DirectX::XMMatrixTranspose(matrixNormal3);
 			DirectX::XMStoreFloat4x4(&(dataPtr->jointNormalMatrix[i]), matrixNormal4);
 		}
-
-		src.m_isDirty = false;
 	}
 
 	// Unlock the constant buffer.
@@ -492,8 +532,10 @@ void RenderModel::__InitializeSquareFromTexture(RenderMain* pRenderer, const Vec
 	// load texture.
 	m_pTexture = RenderTexture::Alloc(pRenderer, pszTexturePath);
 
+	const Vector3 vo(0.f, 0.f, 0.f);
+
 	// compute normal.
-	const Vector3 normal = Vector3::ComputeNormal(Vector3(0.f, 0.f, 0.f), v0, v1);
+	const Vector3 normal = Vector3::ComputeNormal(vo, v0, v1);
 
 	// construct verticies & indicies.
 	std::vector<RenderShader_Vertex_Generic> verticies;
@@ -505,9 +547,9 @@ void RenderModel::__InitializeSquareFromTexture(RenderMain* pRenderer, const Vec
 	RenderShader_Vertex_Generic vertex;
 	Vector2 targetTexPos;
 	m_pTexture->MapUV(0, Vector2(0.f, 0.f), &targetTexPos);
-	vertex.position.x = 0.f;
-	vertex.position.y = 0.f;
-	vertex.position.z = 0.f;
+	vertex.position.x = vo.x;
+	vertex.position.y = vo.y;
+	vertex.position.z = vo.z;
 	vertex.normal.x = normal.x;
 	vertex.normal.y = normal.y;
 	vertex.normal.z = normal.z;
@@ -556,13 +598,11 @@ void RenderModel::__InitializeSquareFromTexture(RenderMain* pRenderer, const Vec
 	// build mesh desc.
 	m_meshes.emplace_back();
 	RenderModel_Mesh& mesh = m_meshes.back();
-	mesh.m_min.x = std::min<f32>(std::min<f32>(verticies[0].position.x, verticies[1].position.x), std::min<f32>(verticies[2].position.x, verticies[3].position.x));
-	mesh.m_min.y = std::min<f32>(std::min<f32>(verticies[0].position.y, verticies[1].position.y), std::min<f32>(verticies[2].position.y, verticies[3].position.y));
-	mesh.m_min.z = std::min<f32>(std::min<f32>(verticies[0].position.z, verticies[1].position.z), std::min<f32>(verticies[2].position.z, verticies[3].position.z));
-
-	mesh.m_max.x = std::max<f32>(std::max<f32>(verticies[0].position.x, verticies[1].position.x), std::max<f32>(verticies[2].position.x, verticies[3].position.x));
-	mesh.m_max.y = std::max<f32>(std::max<f32>(verticies[0].position.y, verticies[1].position.y), std::max<f32>(verticies[2].position.y, verticies[3].position.y));
-	mesh.m_max.z = std::max<f32>(std::max<f32>(verticies[0].position.z, verticies[1].position.z), std::max<f32>(verticies[2].position.z, verticies[3].position.z));
+	mesh.m_bounds.AddVector(vo);
+	mesh.m_bounds.AddVector(v0);
+	mesh.m_bounds.AddVector(v0 + v1);
+	mesh.m_bounds.AddVector(v1);
+	mesh.m_bounds.ComputeCenterAndSize();
 
 	// build verticies.
 	m_vertexCount = static_cast<s32>(verticies.size());

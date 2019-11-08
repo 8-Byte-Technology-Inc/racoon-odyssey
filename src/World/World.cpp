@@ -72,6 +72,7 @@ void World::LoadCharacter(const char* pszCharacterModelPath, const char* pszMode
 	const std::vector<RenderModel_Mesh>& meshes = pModel->GetMeshes();
 	assert(!meshes.empty());
 	const RenderModel_Mesh& mesh = meshes.front();
+	const RenderModel_Bounds& meshBounds = mesh.m_bounds;
 
 	m_pCharacterObj = World_Unit::Alloc(__GetGlobals());
 
@@ -79,7 +80,7 @@ void World::LoadCharacter(const char* pszCharacterModelPath, const char* pszMode
 	m_pCharacterObj->m_pModel = pModel;
 	// scale the model so <y> is 0.75 meters.
 	m_pCharacterObj->m_pos = m_startPos;
-	m_pCharacterObj->m_scale = .75f / mesh.m_size.y;
+	m_pCharacterObj->m_scale = .75f / meshBounds.m_size.y;
 	m_pCharacterObj->m_mass = 2.f;
 	m_pCharacterObj->m_bounds.m_type = World_Object_Bounds_Type_Sphere;
 
@@ -96,7 +97,7 @@ void World::Update(s32 frameCount)
 	__AdjustCharacterModelPositionForCollisions(pos, vel);
 
 	// update.
-	m_pCharacterObj->UpdatePosition(pos, vel);
+	m_pCharacterObj->UpdatePosition(frameCount, pos, vel);
 }
 
 void World::Render(RenderMain* pRenderer)
@@ -475,10 +476,11 @@ void World::__ParseMapStartElement(const u8* pszName, const u8** ppAttribs)
 							World_Object* pObj = World_Object::Alloc(__GetGlobals());
 
 							const RenderModel_Mesh& mesh = meshes.front();
+							const RenderModel_Bounds& meshBounds = mesh.m_bounds;
 
 							pObj->m_modelID = modelID;
 							pObj->m_pos = Vector3(static_cast<f32>(pos.x) + offset.x, static_cast<f32>(pos.y) + offset.y, 0.f);
-							pObj->m_scale = 1.0f / mesh.m_size.x;
+							pObj->m_scale = 1.0f / meshBounds.m_size.x;
 							pObj->m_rotation = rotation;
 							pObj->m_pModel = pModel;
 							pObj->m_bounds.m_type = World_Object_Bounds_Type_Box;

@@ -30,6 +30,7 @@ void World_Object_Bounds::__ComputeBoundsBox(World_Object& object)
 	const std::vector<RenderModel_Mesh>& meshes = object.m_pModel->GetMeshes();
 	assert(!meshes.empty());
 	const RenderModel_Mesh& mesh = meshes.front();
+	const RenderModel_Bounds& meshBounds = mesh.m_bounds;
 
 	// rotate it.
 	Matrix4 matrixRotate;
@@ -45,15 +46,15 @@ void World_Object_Bounds::__ComputeBoundsBox(World_Object& object)
 	worldTransform = Matrix4::MultiplyAB(worldTransform, object.m_worldLocalTransform);
 
 	m_type = World_Object_Bounds_Type_Box;
-	m_center = Vector3((mesh.m_max.x + mesh.m_min.x) / 2.f, (mesh.m_max.y + mesh.m_min.y) / 2.f, (mesh.m_max.z + mesh.m_min.z) / 2.f);
-	m_coords[0] = Vector3(mesh.m_min.x, mesh.m_min.y, mesh.m_min.z);
-	m_coords[1] = Vector3(mesh.m_max.x, mesh.m_min.y, mesh.m_min.z);
-	m_coords[2] = Vector3(mesh.m_max.x, mesh.m_max.y, mesh.m_min.z);
-	m_coords[3] = Vector3(mesh.m_min.x, mesh.m_max.y, mesh.m_min.z);
-	m_coords[4] = Vector3(mesh.m_min.x, mesh.m_min.y, mesh.m_max.z);
-	m_coords[5] = Vector3(mesh.m_max.x, mesh.m_min.y, mesh.m_max.z);
-	m_coords[6] = Vector3(mesh.m_max.x, mesh.m_max.y, mesh.m_max.z);
-	m_coords[7] = Vector3(mesh.m_min.x, mesh.m_max.y, mesh.m_max.z);
+	m_center = meshBounds.m_center;
+	m_coords[0] = Vector3(meshBounds.m_min.x, meshBounds.m_min.y, meshBounds.m_min.z);
+	m_coords[1] = Vector3(meshBounds.m_max.x, meshBounds.m_min.y, meshBounds.m_min.z);
+	m_coords[2] = Vector3(meshBounds.m_max.x, meshBounds.m_max.y, meshBounds.m_min.z);
+	m_coords[3] = Vector3(meshBounds.m_min.x, meshBounds.m_max.y, meshBounds.m_min.z);
+	m_coords[4] = Vector3(meshBounds.m_min.x, meshBounds.m_min.y, meshBounds.m_max.z);
+	m_coords[5] = Vector3(meshBounds.m_max.x, meshBounds.m_min.y, meshBounds.m_max.z);
+	m_coords[6] = Vector3(meshBounds.m_max.x, meshBounds.m_max.y, meshBounds.m_max.z);
+	m_coords[7] = Vector3(meshBounds.m_min.x, meshBounds.m_max.y, meshBounds.m_max.z);
 
 	m_center = Matrix4::MultiplyVector(m_center, worldTransform);
 	for (u32 i = 0; i < ARRAYSIZE(m_coords); ++i)
@@ -67,9 +68,10 @@ void World_Object_Bounds::__ComputeBoundsSphere(World_Object& object)
 	const std::vector<RenderModel_Mesh>& meshes = object.m_pModel->GetMeshes();
 	assert(!meshes.empty());
 	const RenderModel_Mesh& mesh = meshes.front();
+	const RenderModel_Bounds& meshBounds = mesh.m_bounds;
 
-	const Vector3 vCenter((mesh.m_max.x + mesh.m_min.x) / 2.f, (mesh.m_max.y + mesh.m_min.y) / 2.f, (mesh.m_max.z + mesh.m_min.z) / 2.f);
-	const f32 radius = std::max<f32>(std::max<f32>(mesh.m_max.x - mesh.m_min.x, mesh.m_max.y - mesh.m_min.y), mesh.m_max.z - mesh.m_min.z) / 2.f;
+	const Vector3& vCenter = meshBounds.m_center;
+	const f32 radius = std::max<f32>(std::max<f32>(meshBounds.m_size.x, meshBounds.m_size.y), meshBounds.m_size.z) / 2.f;
 
 	m_type = World_Object_Bounds_Type_Sphere;
 	m_center = Matrix4::MultiplyVector(vCenter, object.m_worldLocalTransform) + object.m_pos;
