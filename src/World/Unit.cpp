@@ -2,7 +2,9 @@
 
 #include <cmath>
 
+#include "render/RenderMain.h"
 #include "render/RenderModel.h"
+#include "render/RenderImagine.h"
 
 #include "Unit.h"
 
@@ -10,6 +12,25 @@ namespace TB8
 {
 
 const s32 SITTING_FRAME_MAX = 30;
+
+const s32 THOUGHT_FRAME_SHOW_MIN = 60 * 5;
+const s32 THOUGHT_FRAME_SHOW_MAX = 60 * 10;
+
+const s32 THOUGHT_FRAME_HIDE_MIN = 60 * 10;
+const s32 THOUGHT_FRAME_HIDE_MAX = 60 * 20;
+
+static const char* s_mooeyThoughts[] =
+{
+	"I wonder where little lion and tiger are?",
+	"How did I get in this stone pen?",
+	"I'm really sleepy, and I have no idea where I am.",
+	"That grass over there looks tasty!",
+	"I miss my brothers and sisters",
+	"The farmer's garden has delicious vegtables!",
+	"I miss my bed ...",
+	"I wonder if the farmer's blueberries are ripe?",
+	"I wonder where I am?  I can't see the barn from here.",
+};
 
 World_Unit* World_Unit::Alloc(Client_Globals* pGlobalState)
 {
@@ -23,9 +44,31 @@ void World_Unit::Free()
 	TB8_DEL(this);
 }
 
+World_Unit::~World_Unit()
+{
+	RELEASEI(m_pImagine);
+}
+
 void World_Unit::__Initialize()
 {
 	m_sittingFrame = SITTING_FRAME_MAX;
+
+	m_thoughtFrame = 0;
+	m_thoughtFrameNext = (THOUGHT_FRAME_HIDE_MIN + (rand() % (THOUGHT_FRAME_HIDE_MAX - THOUGHT_FRAME_HIDE_MIN)));
+	m_thoughtFrequency.resize(ARRAYSIZE(s_mooeyThoughts));
+}
+
+void World_Unit::Render2D(const Vector3& screenWorldPos)
+{
+	if (m_pImagine)
+	{
+		const Vector3 renderWorldPos = m_pos - screenWorldPos;
+		const Vector3 renderWorldPosUL(renderWorldPos.x, renderWorldPos.y, renderWorldPos.z + (m_size.y * m_scale));
+		const Vector2 screenPos = __GetRenderer()->WorldToScreenCoords(renderWorldPosUL);
+
+		m_pImagine->SetPosition(screenPos);
+		m_pImagine->Render();
+	}
 }
 
 void World_Unit::ComputeNextPosition(s32 frameCount, Vector3& pos, Vector3& vel)
@@ -126,6 +169,8 @@ void World_Unit::UpdatePosition(s32 frameCount, const Vector3& pos, const Vector
 	{
 		if (m_sittingFrame > 0)
 		{
+			RELEASEI(m_pImagine);
+
 			m_sittingFrame -= (frameCount * 2);
 
 			if (m_sittingFrame > 0)
@@ -186,6 +231,50 @@ void World_Unit::UpdatePosition(s32 frameCount, const Vector3& pos, const Vector
 		__SetAnim(-1);
 		__ComputeModelAnimCenterAndSize(-1);
 		__ComputeModelWorldLocalTransform();
+
+		m_thoughtFrame = 0;
+		m_thoughtFrameNext = (THOUGHT_FRAME_HIDE_MIN + (rand() % (THOUGHT_FRAME_HIDE_MAX - THOUGHT_FRAME_HIDE_MIN)));
+	}
+	else if (m_sittingFrame == SITTING_FRAME_MAX)
+	{
+		m_thoughtFrame += frameCount;
+		const bool change = m_thoughtFrame > m_thoughtFrameNext;
+		if (change)
+		{
+			if (m_pImagine)
+			{
+				RELEASEI(m_pImagine);
+
+				m_thoughtFrame = 0;
+				m_thoughtFrameNext = (THOUGHT_FRAME_HIDE_MIN + (rand() % (THOUGHT_FRAME_HIDE_MAX - THOUGHT_FRAME_HIDE_MIN)));
+			}
+			else
+			{
+				u32 thoughtFreqMax = UINT_MAX;
+				for (u32 i = 0; i < m_thoughtFrequency.size(); ++i)
+				{
+					thoughtFreqMax = std::min<u32>(thoughtFreqMax, m_thoughtFrequency[i]);
+				}
+
+				std::vector<u32> thoughtIndicies;
+				for (u32 i = 0; i < m_thoughtFrequency.size(); ++i)
+				{
+					if (m_thoughtFrequency[i] <= (thoughtFreqMax + 1))
+					{
+						thoughtIndicies.push_back(i);
+					}
+				}
+
+				const u32 iiThought = rand() % thoughtIndicies.size();
+				const u32 iThought = thoughtIndicies[iiThought];
+				m_pImagine = RenderImagine::Alloc(__GetRenderer());
+				m_pImagine->SetText(s_mooeyThoughts[iThought]);
+				m_thoughtFrequency[iThought]++;
+
+				m_thoughtFrame = 0;
+				m_thoughtFrameNext = (THOUGHT_FRAME_SHOW_MIN + (rand() % (THOUGHT_FRAME_SHOW_MAX - THOUGHT_FRAME_SHOW_MIN)));
+			}
+		}
 	}
 
 	// update position, rotation, velocity.

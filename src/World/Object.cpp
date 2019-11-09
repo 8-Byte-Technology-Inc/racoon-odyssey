@@ -29,7 +29,11 @@ void World_Object::Init()
 	ComputeBounds();
 }
 
-void World_Object::Render(const Vector3& screenWorldPos)
+void World_Object::Render2D(const Vector3& screenWorldPos)
+{
+}
+
+void World_Object::Render3D(const Vector3& screenWorldPos)
 {
 	// rotate it.
 	Matrix4 matrixRotate;

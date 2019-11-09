@@ -25,6 +25,35 @@ struct RenderMain_MutableData
 	RenderMain_MutableData();
 };
 
+enum RenderFontID : u32
+{
+	RenderFontID_Unknown = 0,
+
+	RenderFontID_Imagine = 1,
+
+	RenderFontID_COUNT,
+
+	RenderFontID_Custom
+};
+
+enum RenderFontDirection : u32
+{
+	RenderFontDirection_LeftToRight = 0,
+	RenderFontDirection_TopToBottom,
+	RenderFontDirection_BottomToTop,
+};
+
+struct RenderMainFont
+{
+	RenderFontID				m_fontID;
+	std::string					m_name;
+	std::string					m_type;
+	s32							m_size;
+	s32							m_weight;
+	RenderFontDirection			m_direction;
+	IDWriteTextFormat*			m_pFont;
+};
+
 class RenderMain : public Client_Globals_Accessor
 {
 public:
@@ -47,6 +76,7 @@ public:
 	IWICImagingFactory*		GetWICFactory() { return m_wicFactory; }
 	ID2D1Factory1*			GetD2DFactory() { return m_pD2DFactory; }
 	ID2D1DeviceContext*		GetD2DDeviceContext() { return m_pD2DDeviceContext; }
+	IDWriteFactory*			GetWriteFactory() { return m_pDWriteFactory; }
 
 	void BeginUpdate();
 	void EndUpdate();
@@ -73,13 +103,21 @@ public:
 	void AlignWorldPosition(Vector3& worldPos);
 	void AlignWorldSize(Vector3& worldSize);
 	void AlignScreenSize(IVector2& screenSize);
+	Vector2 WorldToScreenCoords(const Vector3& worldCoords);
 
 	void DrawCursor();
 	bool IsCursorVisible() const;
 
+	IDWriteTextFormat* GetFont(RenderFontID fontID) const { return m_fonts[fontID].m_pFont; }
+
 private:
 	void __Initialize();
 	void __Shutdown();
+
+	void __InitFonts();
+	void __CreateFont(RenderMainFont& fontInfo);
+	void __ClearFonts();
+	void __CreateFonts();
 
 	void __ConfigureBuffers();
 	void __ConfigureBuffers_D3D();
@@ -127,6 +165,7 @@ private:
 	float						m_bgColor[4];
 
 	std::vector<RenderShader*>	m_shaders;
+	std::vector<RenderMainFont>		m_fonts;
 
 	RenderMain_MutableData		m_dataRender;
 };

@@ -54,7 +54,6 @@ protected:
 	std::multimap<IVector2, World_Object*>		m_objects;
 
 	World_Unit*									m_pCharacterObj;
-	RenderImagine*								m_pImagine;
 };
 
 

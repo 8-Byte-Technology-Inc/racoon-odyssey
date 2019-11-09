@@ -35,7 +35,8 @@ struct World_Object : public Client_Globals_Accessor
 	void ComputeBounds();
 	bool IsCollision(World_Object_Bounds& bounds) const;
 
-	virtual void Render(const Vector3& screenWorldPos);
+	virtual void Render2D(const Vector3& screenWorldPos);
+	virtual void Render3D(const Vector3& screenWorldPos);
 
 	void __ComputeModelBaseCenterAndSize();
 	void __ComputeModelAnimCenterAndSize(s32 animID);

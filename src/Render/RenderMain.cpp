@@ -162,6 +162,7 @@ void RenderMain::__Shutdown()
 		RELEASEI(*it);
 	}
 	m_shaders.clear();
+	__ClearFonts();
 
 	RELEASEI(m_pRasterizerState);
 	RELEASEI(m_pDepthStencilView);
@@ -315,8 +316,97 @@ void RenderMain::__Initialize()
 	m_shaders.resize(1);
 	m_shaders[0] = RenderShader::Alloc(this, RenderShaderID_Generic, __GetPathBinary().c_str(), "GenericVertexShader.cso", "GenericPixelShader.cso");
 
+	// create fonts.
+	__InitFonts();
+
 	// configure transforms.
 	__ConfigureTransforms();
+}
+
+struct RenderFontInfo
+{
+	RenderFontID		m_fontID;
+	const char*			m_name;
+	const char*			m_type;
+	s32					m_size;
+	s32					m_weight;
+	RenderFontDirection	m_direction;
+};
+
+static RenderFontInfo s_renderFontInfo[] =
+{
+	{ RenderFontID_Imagine, "uif_imagine", "Verdana", 18, 400, RenderFontDirection_LeftToRight },
+};
+
+void RenderMain::__InitFonts()
+{
+	HRESULT hr = S_OK;
+	m_fonts.resize(RenderFontID_COUNT);
+	for (s32 i = 0; i < ARRAYSIZE(s_renderFontInfo); ++i)
+	{
+		const RenderFontInfo& fontInfoSrc = s_renderFontInfo[i];
+		RenderMainFont& fontInfo = m_fonts[fontInfoSrc.m_fontID];
+		fontInfo.m_fontID = fontInfoSrc.m_fontID;
+		fontInfo.m_name = fontInfoSrc.m_name;
+		fontInfo.m_type = fontInfoSrc.m_type;
+		fontInfo.m_size = fontInfoSrc.m_size;
+		fontInfo.m_weight = fontInfoSrc.m_weight;
+		fontInfo.m_direction = fontInfoSrc.m_direction;
+		__CreateFont(fontInfo);
+	}
+}
+
+void RenderMain::__ClearFonts()
+{
+	for (std::vector<RenderMainFont>::iterator it = m_fonts.begin(); it != m_fonts.end(); ++it)
+	{
+		RenderMainFont& fontInfo = *it;
+		RELEASEI(fontInfo.m_pFont);
+	}
+}
+
+void RenderMain::__CreateFonts()
+{
+	for (std::vector<RenderMainFont>::iterator it = m_fonts.begin(); it != m_fonts.end(); ++it)
+	{
+		RenderMainFont& fontInfo = *it;
+		if (fontInfo.m_fontID != RenderFontID_Unknown)
+		{
+			__CreateFont(fontInfo);
+		}
+	}
+}
+
+void RenderMain::__CreateFont(RenderMainFont& fontInfo)
+{
+	HRESULT hr = S_OK;
+
+	// convert type into wide string.
+	WCHAR wszFontFamily[256];
+	mbstowcs_s(nullptr, wszFontFamily, fontInfo.m_type.c_str(), ARRAYSIZE(wszFontFamily));
+
+	RELEASEI(fontInfo.m_pFont);
+	hr = m_pDWriteFactory->CreateTextFormat(
+		wszFontFamily,								// [in]  const WCHAR                 * fontFamilyName,
+		nullptr,									// IDWriteFontCollection * fontCollection,
+		(DWRITE_FONT_WEIGHT)(fontInfo.m_weight),	// DWRITE_FONT_WEIGHT     fontWeight,
+		DWRITE_FONT_STYLE_NORMAL,					// DWRITE_FONT_STYLE      fontStyle,
+		DWRITE_FONT_STRETCH_NORMAL,					// DWRITE_FONT_STRETCH    fontStretch,
+		static_cast<FLOAT>(ComputeViewPixelsFromHardPixels(fontInfo.m_size, m_dataRender.m_scaleSize)), // FLOAT                  fontSize,
+		L"enUS",									// [in] const WCHAR                 * localeName,
+		&(fontInfo.m_pFont));						// [out] IDWriteTextFormat     ** textFormat
+	assert(hr == S_OK);
+
+	if (fontInfo.m_direction == RenderFontDirection_TopToBottom)
+	{
+		//fontInfo.m_pFont->SetReadingDirection(DWRITE_READING_DIRECTION_TOP_TO_BOTTOM);
+		fontInfo.m_pFont->SetFlowDirection(DWRITE_FLOW_DIRECTION_TOP_TO_BOTTOM);
+	}
+	else  if (fontInfo.m_direction == RenderFontDirection_BottomToTop)
+	{
+		//fontInfo.m_pFont->SetReadingDirection(DWRITE_READING_DIRECTION_BOTTOM_TO_TOP);
+		fontInfo.m_pFont->SetFlowDirection(DWRITE_FLOW_DIRECTION_BOTTOM_TO_TOP);
+	}
 }
 
 void RenderMain::__ConfigureTransforms()
@@ -444,6 +534,16 @@ void RenderMain::AlignScreenSize(IVector2& screenSize)
 
 	screenSize.x = ((screenSize.x + 1) / 2) * 2;
 	screenSize.y = ((screenSize.y + 1) / 2) * 2;
+}
+
+Vector2 RenderMain::WorldToScreenCoords(const Vector3& worldCoords)
+{
+	// this is centered on the middle of the screen.
+	const Vector3 screenCoordsDX = Matrix4::MultiplyVector(worldCoords, m_worldToScreen);
+
+	// convert relative to UL.
+	return Vector2(((static_cast<f32>(m_dataRender.m_screenSizePixels.x) / 2.f) + screenCoordsDX.x),
+					(static_cast<f32>(m_dataRender.m_screenSizePixels.y) / 2.f) - screenCoordsDX.y);
 }
 
 void RenderMain::__SetScreenSizePixels(const IVector2& screenSizePixels, s32 dpi)
@@ -675,6 +775,10 @@ void RenderMain::__ResizeBuffers()
 
 	// configure new buffers, based on the new size.
 	__ConfigureBuffers();
+
+	// recreate fonts.
+	__ClearFonts();
+	__CreateFonts();
 
 	// let everyone know we resized the buffers.
 	EventMessage* event = EventMessage_RenderAreaResize::Alloc(m_dataRender.m_dpi, m_dataRender.m_scaleSize, m_dataRender.m_screenSizePixels);

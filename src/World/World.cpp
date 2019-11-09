@@ -25,7 +25,6 @@ const f32 TILES_PER_METER = 1.0f;
 World::World(Client_Globals* pGlobalState)
 	: Client_Globals_Accessor(pGlobalState)
 	, m_pCharacterObj(nullptr)
-	, m_pImagine(nullptr)
 {
 }
 
@@ -126,23 +125,19 @@ void World::Render3D(RenderMain* pRenderer)
 			(it != m_objects.end()) && (it->first.y == cellPos.y) && (it->first.x <= tiles.right); ++it)
 		{
 			World_Object* pObj = it->second;
-			pObj->Render(screenWorldPos);
+			pObj->Render3D(screenWorldPos);
 		}
 	}
 
 	// draw the character.
 	{
-		m_pCharacterObj->Render(m_pCharacterObj->m_pos);
+		m_pCharacterObj->Render3D(m_pCharacterObj->m_pos);
 	}
 }
 
 void World::Render2D(RenderMain* pRenderer)
 {
-	// render imagine buble.
-	if (m_pImagine)
-	{
-		m_pImagine->Render();
-	}
+	m_pCharacterObj->Render2D(m_pCharacterObj->m_pos);
 }
 
 void World::__Initialize()
@@ -150,10 +145,6 @@ void World::__Initialize()
 	// register for events.
 	__GetEventQueue()->RegisterForMessage(EventModuleID_World, EventMessageID_MoveStart, std::bind(&World::__EventHandler, this, std::placeholders::_1));
 	__GetEventQueue()->RegisterForMessage(EventModuleID_World, EventMessageID_MoveEnd, std::bind(&World::__EventHandler, this, std::placeholders::_1));
-
-	m_pImagine = RenderImagine::Alloc(__GetRenderer());
-	m_pImagine->SetSize(IVector2(300, 200));
-	m_pImagine->SetPosition(IVector2(200, 200));
 }
 
 void World::__Uninitialize()

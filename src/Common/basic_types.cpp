@@ -54,6 +54,26 @@ Vector3 operator /(const Vector3& a, f32 b)
 	return Vector3(a.x / b, a.y / b, a.z / b);
 }
 
+Vector2 operator +(const Vector2& a, const Vector2& b)
+{
+	return Vector2(a.x + b.x, a.y + b.y);
+}
+
+Vector2 operator -(const Vector2& a, const Vector2& b)
+{
+	return Vector2(a.x - b.x, a.y - b.y);
+}
+
+Vector2 operator *(const Vector2& a, f32 b)
+{
+	return Vector2(a.x * b, a.y * b);
+}
+
+Vector2 operator /(const Vector2& a, f32 b)
+{
+	return Vector2(a.x / b, a.y / b);
+}
+
 Vector4 Vector4::SLERP(const Vector4& qa, const Vector4& qb, f32 t)
 {
 	Vector4 qr;
