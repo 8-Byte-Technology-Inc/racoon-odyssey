@@ -113,6 +113,7 @@ struct Vector2
 	bool operator ==(const Vector2& rhs) const { return x == rhs.x && y == rhs.y; }
 	Vector2& operator -= (const Vector2& rhs) { x += rhs.x; y += rhs.y; return *this; }
 	void Normalize();
+	static f32 Dot(const Vector2& a, const Vector2& b) { return (a.x * b.x) + (a.y * b.y); }
 	static Vector2 NormalL(const Vector2& p0, const Vector2& p1) { Vector2 n(p1.y - p0.y, p0.x - p1.x); return n; }
 	static Vector2 NormalR(const Vector2& p0, const Vector2& p1) { Vector2 n(p0.y - p1.y, p1.x - p0.x); return n; }
 } ;
