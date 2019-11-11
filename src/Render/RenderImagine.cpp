@@ -281,77 +281,148 @@ void RenderImagine::__ComputeLayout_Text()
 		layout.m_offsetPosToUL.y = offsetPosToUL.y + (layout.m_index) * (textLineHeight + spacingSize.y);
 	}
 
+	// compute center pos.
+	m_posToCenter = (offsetPosToUL + offsetPosToLR) / 2.f;
+
 	// construct bubble points.
 	{
 		// top.
-
 		{
 			RenderImagine_TextLine& line = m_layouts.front();
-			const f32 width = spacingSize.x + line.m_size.x + spacingSize.x;
-			const u32 segments = std::max<u32>(1, static_cast<s32>(width / textLineHeight));
-			const f32 segWidth = width / static_cast<f32>(segments);
-
-			Vector2 offsetPosToSeg = line.m_offsetPosToUL - spacingSize;
-			m_bubblePoints.push_back(offsetPosToSeg);
-
-			for (u32 i = 0; i < segments; ++i)
-			{
-				offsetPosToSeg.x += segWidth;
-				m_bubblePoints.push_back(offsetPosToSeg);
-			}
+			const Vector2 p0(line.m_offsetPosToUL.x - spacingSize.x, line.m_offsetPosToUL.y - spacingSize.y);
+			m_bubblePoints.push_back(p0);
+			const Vector2 p1(line.m_offsetPosToUL.x + line.m_size.x + spacingSize.x, line.m_offsetPosToUL.y - spacingSize.y);
+			m_bubblePoints.push_back(p1);
 		}
 
 		// right.
 		{
 			for (std::vector<RenderImagine_TextLine>::iterator it = m_layouts.begin(); it != m_layouts.end(); ++it)
 			{
-				const RenderImagine_TextLine& line = *it;
+				RenderImagine_TextLine& line = *it;
+				const Vector2 p0(line.m_offsetPosToUL.x + line.m_size.x + spacingSize.x, line.m_offsetPosToUL.y - spacingSize.y);
 
-				Vector2 offsetPosToSeg1(line.m_offsetPosToUL.x + line.m_size.x + spacingSize.x, line.m_offsetPosToUL.y - spacingSize.y);
-				Vector2 offsetPosToSeg2(offsetPosToSeg1.x, line.m_offsetPosToUL.y + line.m_size.y + spacingSize.y);
-
-				if (m_bubblePoints.back().x < offsetPosToSeg1.x)
+				if (m_bubblePoints.back().x < p0.x)
 				{
-					m_bubblePoints.back() = offsetPosToSeg1;
+					m_bubblePoints.back() = p0;
 				}
-				m_bubblePoints.push_back(offsetPosToSeg2);
+
+				const Vector2 p1(line.m_offsetPosToUL.x + line.m_size.x + spacingSize.x, line.m_offsetPosToUL.y + line.m_size.y + spacingSize.y);
+				m_bubblePoints.push_back(p1);
 			}
 		}
 
 		// bottom.
 		{
 			RenderImagine_TextLine& line = m_layouts.back();
-			const f32 width = spacingSize.x + line.m_size.x + spacingSize.x;
-			const u32 segments = std::max<u32>(1, static_cast<s32>(width / textLineHeight));
-			const f32 segWidth = width / static_cast<f32>(segments);
-
-			Vector2 offsetPosToSeg = line.m_offsetPosToUL + line.m_size + spacingSize;
-
-			for (u32 i = 0; i < segments; ++i)
-			{
-				offsetPosToSeg.x -= segWidth;
-				m_bubblePoints.push_back(offsetPosToSeg);
-			}
+			const Vector2 p0(line.m_offsetPosToUL.x + line.m_size.x + spacingSize.x, line.m_offsetPosToUL.y + line.m_size.y + spacingSize.y);
+			m_bubblePoints.push_back(p0);
+			const Vector2 p1(line.m_offsetPosToUL.x - spacingSize.x, line.m_offsetPosToUL.y + line.m_size.y + spacingSize.y);
+			m_bubblePoints.push_back(p1);
 		}
 
 		// left.
 		{
 			for (std::vector<RenderImagine_TextLine>::reverse_iterator it = m_layouts.rbegin(); it != m_layouts.rend(); ++it)
 			{
-				const RenderImagine_TextLine& line = *it;
+				RenderImagine_TextLine& line = *it;
+				const Vector2 p0(line.m_offsetPosToUL.x - spacingSize.x, line.m_offsetPosToUL.y + line.m_size.y + spacingSize.y);
 
-				Vector2 offsetPosToSeg1(line.m_offsetPosToUL.x - spacingSize.x, line.m_offsetPosToUL.y + line.m_size.y + spacingSize.y);
-				Vector2 offsetPosToSeg2(offsetPosToSeg1.x, line.m_offsetPosToUL.y - spacingSize.y);
-
-				if (m_bubblePoints.back().x > offsetPosToSeg1.x)
+				if (m_bubblePoints.back().x > p0.x)
 				{
-					m_bubblePoints.back() = offsetPosToSeg1;
+					m_bubblePoints.back() = p0;
 				}
-				m_bubblePoints.push_back(offsetPosToSeg2);
+
+				const Vector2 p1(line.m_offsetPosToUL.x - spacingSize.x, line.m_offsetPosToUL.y - spacingSize.y);
+				m_bubblePoints.push_back(p1);
+			}
+
+		}
+	}
+
+	__AdjustBubblePoints();
+}
+
+void RenderImagine::__AdjustBubblePoints()
+{
+	const f32 bubbleSize = m_layouts.front().m_size.y;
+
+	// add / remove points to ensure spacing.
+	{
+		const f32 magSqMin = bubbleSize * bubbleSize;
+		const f32 magSqMax = magSqMin * 4.5f;
+
+		std::vector<Vector2>::iterator it = m_bubblePoints.begin();
+		while ((it != m_bubblePoints.end()) && ((it + 1) != m_bubblePoints.end()))
+		{
+			const Vector2& p0 = *(it);
+			const Vector2& p1 = *(it + 1);
+			const Vector2 v0 = p1 - p0;
+
+			// ensure there is a reasonable distance between points.
+			const f32 magSqV0 = v0.MagSq();
+			if (magSqV0 < magSqMin)
+			{
+				// too close to next segment, delete the nearest.
+				const Vector2 pC0 = p0 - m_posToCenter;
+				const Vector2 pC1 = p1 - m_posToCenter;
+				const f32 distC0 = pC0.Mag();
+				const f32 distC1 = pC1.Mag();
+				if (distC0 < distC1)
+				{
+					it = m_bubblePoints.erase(it);
+				}
+				else
+				{
+					it = m_bubblePoints.erase(it + 1);
+					--it;
+				}
+			}
+			else if (magSqV0 > magSqMax)
+			{
+				// too far from next segment, split it.
+				const Vector2 p01 = ((p0 + p1) / 2.f);
+				Vector2 pC01 = p01 - m_posToCenter;
+				pC01.Normalize();
+				const Vector2 pI = p01 + (pC01 * (bubbleSize * .1f));
+				it = m_bubblePoints.insert(it + 1, pI);
+				--it;
+			}
+			else
+			{
+				++it;
 			}
 		}
+	}
 
+	// ensure it's convex.
+	bool foundConcave = true;
+	while (foundConcave)
+	{
+		foundConcave = false;
+		for (std::vector<Vector2>::iterator it = m_bubblePoints.begin();
+			(it != m_bubblePoints.end()) && ((it + 1) != m_bubblePoints.end()) && ((it + 2) != m_bubblePoints.end()) && !foundConcave; 
+			++it)
+		{
+			const Vector2& p0 = *(it);
+			const Vector2& p1 = *(it + 1);
+			const Vector2& p2 = *(it + 2);
 
+			const Vector2 v0 = p1 - p0;
+			const Vector2 v1 = p2 - p1;
+
+			Vector3 v0n = Vector3::Normalize(Vector3(v0.x, v0.y, 0.f));
+			Vector3 v1n = Vector3::Normalize(Vector3(v1.x, v1.y, 0.f));
+			Vector3 vX = Vector3::Cross(v0n, v1n);
+
+			if (is_approx_zero(vX.z) || (vX.z > 0.f))
+				continue;
+
+			foundConcave = true;
+			Vector2 pC1 = p1 - m_posToCenter;
+			pC1.Normalize();
+			*(it + 1) = p1 + (pC1 * (bubbleSize * .1f));
+		}
 	}
 }
 
