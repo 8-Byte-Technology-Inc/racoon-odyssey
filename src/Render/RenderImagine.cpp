@@ -34,6 +34,7 @@ void RenderImagine::__Free()
 
 RenderImagine::RenderImagine(RenderMain* pRenderer)
 	: m_pRenderer(pRenderer)
+	, m_type(RenderImagine_Type_Imagine)
 	, m_pszText(nullptr)
 	, m_pBubbleGeometry(nullptr)
 {
@@ -55,7 +56,7 @@ void RenderImagine::SetPosition(const Vector2& pos)
 	if (m_pos == pos)
 		return;
 	m_pos = pos;
-	__ComputeBubbleGeometry();
+	__ComputeGeometry();
 }
 
 void RenderImagine::SetText(const char* pszText)
@@ -68,7 +69,7 @@ void RenderImagine::SetText(const char* pszText)
 
 	// compute layout.
 	__ComputeLayout_Text();
-	__ComputeBubbleGeometry();
+	__ComputeGeometry();
 }
 
 void RenderImagine::__CleanupLayouts()
@@ -143,33 +144,46 @@ void RenderImagine::__ComputeLayout_Text()
 
 	// determine desired width of each line.
 	std::vector<f32> lineWidthsDesired;
-	if (words.size() > 1)
+	if (m_type == RenderImagine_Type_Imagine)
 	{
-		const u32 lineCount = static_cast<u32>(sqrt(totalWidth / (2.f * maxHeight)));
-		const u32 lineMid = (lineCount & 1) ? (lineCount / 2) : (lineCount / 2) - 1;
-		const f32 lineWidth = totalWidth / static_cast<f32>(lineCount);
-		const f32 lineMult = 0.15f;
-		const f32 lineDelta = lineWidth * lineMult;
-
-		const s32 f0 = (lineCount & 1) ? (lineCount / 2) : ((lineCount - 1) / 2);
-		const s32 f1 = f0 * f0 + f0;
-		const f32 f2 = lineMult * (static_cast<f32>(f1) / static_cast<f32>(lineCount)) + 1.f;
-
-		const f32 lineWidthMax = lineWidth * f2;
-
-		lineWidthsDesired.resize(lineCount);
-
-		f32 lineWidthI = lineWidthMax;
-		for (s32 i = lineMid; i >= 0; --i, lineWidthI -= lineDelta)
+		if (words.size() > 1)
 		{
-			lineWidthsDesired[i] = lineWidthI;
-			lineWidthsDesired[lineCount - i - 1] = lineWidthI;
+			const u32 lineCount = static_cast<u32>(sqrt(totalWidth / (2.f * maxHeight)));
+			const u32 lineMid = (lineCount & 1) ? (lineCount / 2) : (lineCount / 2) - 1;
+			const f32 lineWidth = totalWidth / static_cast<f32>(lineCount);
+			const f32 lineMult = 0.15f;
+			const f32 lineDelta = lineWidth * lineMult;
+
+			const s32 f0 = (lineCount & 1) ? (lineCount / 2) : ((lineCount - 1) / 2);
+			const s32 f1 = f0 * f0 + f0;
+			const f32 f2 = lineMult * (static_cast<f32>(f1) / static_cast<f32>(lineCount)) + 1.f;
+
+			const f32 lineWidthMax = lineWidth * f2;
+
+			lineWidthsDesired.resize(lineCount);
+
+			f32 lineWidthI = lineWidthMax;
+			for (s32 i = lineMid; i >= 0; --i, lineWidthI -= lineDelta)
+			{
+				lineWidthsDesired[i] = lineWidthI;
+				lineWidthsDesired[lineCount - i - 1] = lineWidthI;
+			}
+		}
+		else
+		{
+			lineWidthsDesired.resize(1);
+			lineWidthsDesired[0] = totalWidth;
 		}
 	}
-	else
+	else if (m_type == RenderImagine_Type_Speech)
 	{
-		lineWidthsDesired.resize(1);
-		lineWidthsDesired[0] = totalWidth;
+		const u32 lineCount = static_cast<u32>(sqrt(totalWidth / (2.f * maxHeight)));
+		const f32 lineWidth = totalWidth / static_cast<f32>(lineCount);
+		lineWidthsDesired.resize(lineCount);
+		for (std::vector<f32>::iterator it = lineWidthsDesired.begin(); it != lineWidthsDesired.end(); ++it)
+		{
+			*it = lineWidth;
+		}
 	}
 
 	// populate text layouts.
@@ -252,13 +266,20 @@ void RenderImagine::__ComputeLayout_Text()
 
 	// compute position for circles.
 	Vector2 offsetPosToCircle(0.f, 0.f);
-	f32 radius = textLineHeight / 8.f;
-	for (u32 i = 0; i < CIRCLE_COUNT; ++i)
+	if (m_type == RenderImagine_Type_Imagine)
 	{
-		offsetPosToCircle.x -= radius * 2.f;
-		offsetPosToCircle.y -= radius * 2.f;
+		f32 radius = textLineHeight / 8.f;
+		for (u32 i = 0; i < CIRCLE_COUNT; ++i)
+		{
+			offsetPosToCircle.x -= radius * 2.f;
+			offsetPosToCircle.y -= radius * 2.f;
 
-		radius += textLineHeight / 8.f;
+			radius += textLineHeight / 8.f;
+		}
+	}
+	else if (m_type == RenderImagine_Type_Speech)
+	{
+		offsetPosToCircle = Vector2(0.f, -textLineHeight * 2.5f);
 	}
 
 	// compute UL position for each line.
@@ -278,14 +299,17 @@ void RenderImagine::__ComputeLayout_Text()
 	// compute center pos.
 	m_posToCenter = (offsetPosToUL + offsetPosToLR) / 2.f;
 
-	__AddBubblePoints();
-	__AdjustBubblePointSegments();
-	__AdjustBubblePointConvex();
-	for (u32 i = 0; i < 3; ++i)
+	if (m_type == RenderImagine_Type_Imagine)
 	{
-		__AdjustBubblePointSpacing();
+		__AddBubblePoints();
+		__AdjustBubblePointSegments();
+		__AdjustBubblePointConvex();
+		for (u32 i = 0; i < 3; ++i)
+		{
+			__AdjustBubblePointSpacing();
+		}
+		__AddCircles();
 	}
-	__AddCircles();
 }
 
 void RenderImagine::__AddBubblePoints()
@@ -343,7 +367,6 @@ void RenderImagine::__AddBubblePoints()
 			const Vector2 p1(line.m_offsetPosToUL.x - spacingSize.x, line.m_offsetPosToUL.y - spacingSize.y);
 			m_bubblePoints.push_back(p1);
 		}
-
 	}
 }
 
@@ -555,7 +578,19 @@ void RenderImagine::__AddCircles()
 	}
 }
 
-void RenderImagine::__ComputeBubbleGeometry()
+void RenderImagine::__ComputeGeometry()
+{
+	if (m_type == RenderImagine_Type_Imagine)
+	{
+		__ComputeImagineGeometry();
+	}
+	else if (m_type == RenderImagine_Type_Speech)
+	{
+		__ComputeSpeechGeometry();
+	}
+}
+
+void RenderImagine::__ComputeImagineGeometry()
 {
 	HRESULT hr = S_OK;
 
@@ -587,6 +622,58 @@ void RenderImagine::__ComputeBubbleGeometry()
 
 		p0 = p4;
 	}
+
+	pSink->EndFigure(D2D1_FIGURE_END_CLOSED);
+	pSink->Close();
+	RELEASEI(pSink);
+}
+
+void RenderImagine::__ComputeSpeechGeometry()
+{
+	HRESULT hr = S_OK;
+	const f32 outerSpacing = m_layouts.front().m_size.y / 2.f;
+	const f32 originOffset = static_cast<f32>(ComputeViewPixelsFromHardPixels(BASE_SPACING_PIXELS, m_pRenderer->GetRenderScaleSize()));
+	const f32 arrowOffset = m_textSize.x / 6.f;
+	const f32 arrowSize = arrowOffset / 2.f;
+
+	// prepare the bubble geometry.
+	RELEASEI(m_pBubbleGeometry);
+	hr = m_pRenderer->GetD2DFactory()->CreatePathGeometry(&m_pBubbleGeometry);
+	assert(SUCCEEDED(hr));
+
+	ID2D1GeometrySink* pSink = nullptr;
+	hr = m_pBubbleGeometry->Open(&pSink);
+	assert(SUCCEEDED(hr));
+
+	// compute points.
+	const Vector2 p0 = m_pos + Vector2(m_posToCenter.x - m_textSize.x / 2.f, m_posToCenter.y - m_textSize.y / 2.f - outerSpacing);
+	const Vector2 p1 = m_pos + Vector2(m_posToCenter.x + m_textSize.x / 2.f, m_posToCenter.y - m_textSize.y / 2.f - outerSpacing);
+	const Vector2 p2 = m_pos + Vector2(m_posToCenter.x + m_textSize.x / 2.f + outerSpacing, m_posToCenter.y - m_textSize.y / 2.f - outerSpacing);
+	const Vector2 p3 = m_pos + Vector2(m_posToCenter.x + m_textSize.x / 2.f + outerSpacing, m_posToCenter.y - m_textSize.y / 2.f);
+	const Vector2 p4 = m_pos + Vector2(m_posToCenter.x + m_textSize.x / 2.f + outerSpacing, m_posToCenter.y + m_textSize.y / 2.f);
+	const Vector2 p5 = m_pos + Vector2(m_posToCenter.x + m_textSize.x / 2.f + outerSpacing, m_posToCenter.y + m_textSize.y / 2.f + outerSpacing);
+	const Vector2 p6 = m_pos + Vector2(m_posToCenter.x + m_textSize.x / 2.f, m_posToCenter.y + m_textSize.y / 2.f + outerSpacing);
+	const Vector2 p7 = m_pos + Vector2(m_posToCenter.x + m_textSize.x / 2.f - arrowOffset, m_posToCenter.y + m_textSize.y / 2.f + outerSpacing);
+	const Vector2 p8 = m_pos + Vector2(-outerSpacing, -outerSpacing);
+	const Vector2 p9 = m_pos + Vector2(m_posToCenter.x + m_textSize.x / 2.f - arrowOffset - arrowSize, m_posToCenter.y + m_textSize.y / 2.f + outerSpacing);
+	const Vector2 p10 = m_pos + Vector2(m_posToCenter.x - m_textSize.x / 2.f, m_posToCenter.y + m_textSize.y / 2.f + outerSpacing);
+	const Vector2 p11 = m_pos + Vector2(m_posToCenter.x - m_textSize.x / 2.f - outerSpacing, m_posToCenter.y + m_textSize.y / 2.f + outerSpacing);
+	const Vector2 p12 = m_pos + Vector2(m_posToCenter.x - m_textSize.x / 2.f - outerSpacing, m_posToCenter.y + m_textSize.y / 2.f);
+	const Vector2 p13 = m_pos + Vector2(m_posToCenter.x - m_textSize.x / 2.f - outerSpacing, m_posToCenter.y - m_textSize.y / 2.f);
+	const Vector2 p14 = m_pos + Vector2(m_posToCenter.x - m_textSize.x / 2.f - outerSpacing, m_posToCenter.y - m_textSize.y / 2.f - outerSpacing);
+
+	pSink->BeginFigure(D2D1::Point2F(p0.x, p0.y), D2D1_FIGURE_BEGIN_FILLED);
+	pSink->AddLine(D2D1::Point2F(p1.x, p1.y));
+	pSink->AddBezier(D2D1::BezierSegment(D2D1::Point2F(p1.x, p1.y), D2D1::Point2F(p2.x, p2.y), D2D1::Point2F(p3.x, p3.y)));
+	pSink->AddLine(D2D1::Point2F(p4.x, p4.y));
+	pSink->AddBezier(D2D1::BezierSegment(D2D1::Point2F(p4.x, p4.y), D2D1::Point2F(p5.x, p5.y), D2D1::Point2F(p6.x, p6.y)));
+	pSink->AddLine(D2D1::Point2F(p7.x, p7.y));
+	pSink->AddLine(D2D1::Point2F(p8.x, p8.y));
+	pSink->AddLine(D2D1::Point2F(p9.x, p9.y));
+	pSink->AddLine(D2D1::Point2F(p10.x, p10.y));
+	pSink->AddBezier(D2D1::BezierSegment(D2D1::Point2F(p10.x, p10.y), D2D1::Point2F(p11.x, p11.y), D2D1::Point2F(p12.x, p12.y)));
+	pSink->AddLine(D2D1::Point2F(p13.x, p13.y));
+	pSink->AddBezier(D2D1::BezierSegment(D2D1::Point2F(p13.x, p13.y), D2D1::Point2F(p14.x, p14.y), D2D1::Point2F(p0.x, p0.y)));
 
 	pSink->EndFigure(D2D1_FIGURE_END_CLOSED);
 	pSink->Close();

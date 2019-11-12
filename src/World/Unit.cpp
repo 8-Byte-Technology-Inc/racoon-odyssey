@@ -268,7 +268,9 @@ void World_Unit::UpdatePosition(s32 frameCount, const Vector3& pos, const Vector
 
 				const u32 iiThought = rand() % thoughtIndicies.size();
 				const u32 iThought = thoughtIndicies[iiThought];
+				const RenderImagine_Type t = (rand() & 1) ? RenderImagine_Type_Imagine : RenderImagine_Type_Speech;
 				m_pImagine = RenderImagine::Alloc(__GetRenderer());
+				m_pImagine->SetType(t);
 				m_pImagine->SetText(s_mooeyThoughts[iThought]);
 				m_thoughtFrequency[iThought]++;
 

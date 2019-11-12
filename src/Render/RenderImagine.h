@@ -28,6 +28,12 @@ struct RenderImagine_Circle
 	f32						m_radius;
 };
 
+enum RenderImagine_Type : u32
+{
+	RenderImagine_Type_Imagine,
+	RenderImagine_Type_Speech,
+};
+
 class RenderImagine : public ref_count
 {
 public:
@@ -36,6 +42,7 @@ public:
 	RenderImagine(RenderMain* pRenderer);
 	~RenderImagine();
 
+	void SetType(RenderImagine_Type type) { m_type = type; }
 	void SetPosition(const Vector2& pos);
 	void SetText(const char* pszText);
 	void SetImage(RenderTexture* pTexture);
@@ -46,7 +53,9 @@ protected:
 	void __Initialize();
 	virtual void __Free() override;
 	void __ComputeLayout_Text();
-	void __ComputeBubbleGeometry();
+	void __ComputeGeometry();
+	void __ComputeImagineGeometry();
+	void __ComputeSpeechGeometry();
 	void __CleanupLayouts();
 	void __AddBubblePoints();
 	void __AdjustBubblePointSegments();
@@ -56,6 +65,7 @@ protected:
 
 	RenderMain*								m_pRenderer;
 
+	RenderImagine_Type						m_type;
 	WCHAR*									m_pszText;
 	std::vector<RenderImagine_TextLine>		m_layouts;
 	std::vector<RenderImagine_Circle>		m_circles;
