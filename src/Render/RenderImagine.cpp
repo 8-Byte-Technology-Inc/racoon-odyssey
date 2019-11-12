@@ -196,8 +196,8 @@ void RenderImagine::__ComputeLayout_Text()
 					pszLineStart,								// [in]  const WCHAR*			string,
 					stringLen,									// UINT32						stringLength,
 					pTextFormat,								// IDWriteTextFormat * textFormat,
-					1024.f,										// FLOAT              maxWidth,
-					1024.f,										// FLOAT              maxHeight,
+					4096.f,										// FLOAT              maxWidth,
+					128.f,										// FLOAT              maxHeight,
 					&(layout.m_pLayout));						// [out]       IDWriteTextLayout ** textLayout
 				assert(hr == S_OK);
 
@@ -224,8 +224,8 @@ void RenderImagine::__ComputeLayout_Text()
 				pszLineStart,								// [in]  const WCHAR*			string,
 				stringLen,									// UINT32						stringLength,
 				pTextFormat,								// IDWriteTextFormat * textFormat,
-				1024.f,										// FLOAT              maxWidth,
-				1024.f,										// FLOAT              maxHeight,
+				4096.f,										// FLOAT              maxWidth,
+				128.f,										// FLOAT              maxHeight,
 				&(layout.m_pLayout));						// [out]       IDWriteTextLayout ** textLayout
 			assert(hr == S_OK);
 		}
@@ -253,19 +253,10 @@ void RenderImagine::__ComputeLayout_Text()
 	// compute position for circles.
 	Vector2 offsetPosToCircle(0.f, 0.f);
 	f32 radius = textLineHeight / 8.f;
-	m_circles.resize(CIRCLE_COUNT);
-	for (std::vector<RenderImagine_Circle>::iterator it = m_circles.begin(); it != m_circles.end(); ++it)
+	for (u32 i = 0; i < CIRCLE_COUNT; ++i)
 	{
-		RenderImagine_Circle& circle = *it;
-
-		offsetPosToCircle.x -= radius;
-		offsetPosToCircle.y -= radius;
-
-		circle.m_offsetPosToCenter = offsetPosToCircle;
-		circle.m_radius = radius;
-
-		offsetPosToCircle.x -= radius;
-		offsetPosToCircle.y -= radius;
+		offsetPosToCircle.x -= radius * 2.f;
+		offsetPosToCircle.y -= radius * 2.f;
 
 		radius += textLineHeight / 8.f;
 	}
@@ -281,76 +272,89 @@ void RenderImagine::__ComputeLayout_Text()
 		layout.m_offsetPosToUL.y = offsetPosToUL.y + (layout.m_index) * (textLineHeight + spacingSize.y);
 	}
 
+	// compute text size.
+	m_textSize = offsetPosToLR - offsetPosToUL;
+
 	// compute center pos.
 	m_posToCenter = (offsetPosToUL + offsetPosToLR) / 2.f;
 
-	// construct bubble points.
+	__AddBubblePoints();
+	__AdjustBubblePointSegments();
+	__AdjustBubblePointConvex();
+	for (u32 i = 0; i < 3; ++i)
 	{
-		// top.
-		{
-			RenderImagine_TextLine& line = m_layouts.front();
-			const Vector2 p0(line.m_offsetPosToUL.x - spacingSize.x, line.m_offsetPosToUL.y - spacingSize.y);
-			m_bubblePoints.push_back(p0);
-			const Vector2 p1(line.m_offsetPosToUL.x + line.m_size.x + spacingSize.x, line.m_offsetPosToUL.y - spacingSize.y);
-			m_bubblePoints.push_back(p1);
-		}
+		__AdjustBubblePointSpacing();
+	}
+	__AddCircles();
+}
 
-		// right.
+void RenderImagine::__AddBubblePoints()
+{
+	const f32 spacing = static_cast<f32>(ComputeViewPixelsFromHardPixels(BASE_SPACING_PIXELS, m_pRenderer->GetRenderScaleSize()));
+	const Vector2 spacingSize(spacing, spacing);
+
+	// top.
+	{
+		RenderImagine_TextLine& line = m_layouts.front();
+		const Vector2 p0(line.m_offsetPosToUL.x - spacingSize.x, line.m_offsetPosToUL.y - spacingSize.y);
+		m_bubblePoints.push_back(p0);
+		const Vector2 p1(line.m_offsetPosToUL.x + line.m_size.x + spacingSize.x, line.m_offsetPosToUL.y - spacingSize.y);
+		m_bubblePoints.push_back(p1);
+	}
+
+	// right.
+	{
+		for (std::vector<RenderImagine_TextLine>::iterator it = m_layouts.begin(); it != m_layouts.end(); ++it)
 		{
-			for (std::vector<RenderImagine_TextLine>::iterator it = m_layouts.begin(); it != m_layouts.end(); ++it)
+			RenderImagine_TextLine& line = *it;
+			const Vector2 p0(line.m_offsetPosToUL.x + line.m_size.x + spacingSize.x, line.m_offsetPosToUL.y - spacingSize.y);
+
+			if (m_bubblePoints.back().x < p0.x)
 			{
-				RenderImagine_TextLine& line = *it;
-				const Vector2 p0(line.m_offsetPosToUL.x + line.m_size.x + spacingSize.x, line.m_offsetPosToUL.y - spacingSize.y);
-
-				if (m_bubblePoints.back().x < p0.x)
-				{
-					m_bubblePoints.back() = p0;
-				}
-
-				const Vector2 p1(line.m_offsetPosToUL.x + line.m_size.x + spacingSize.x, line.m_offsetPosToUL.y + line.m_size.y + spacingSize.y);
-				m_bubblePoints.push_back(p1);
-			}
-		}
-
-		// bottom.
-		{
-			RenderImagine_TextLine& line = m_layouts.back();
-			const Vector2 p0(line.m_offsetPosToUL.x + line.m_size.x + spacingSize.x, line.m_offsetPosToUL.y + line.m_size.y + spacingSize.y);
-			m_bubblePoints.push_back(p0);
-			const Vector2 p1(line.m_offsetPosToUL.x - spacingSize.x, line.m_offsetPosToUL.y + line.m_size.y + spacingSize.y);
-			m_bubblePoints.push_back(p1);
-		}
-
-		// left.
-		{
-			for (std::vector<RenderImagine_TextLine>::reverse_iterator it = m_layouts.rbegin(); it != m_layouts.rend(); ++it)
-			{
-				RenderImagine_TextLine& line = *it;
-				const Vector2 p0(line.m_offsetPosToUL.x - spacingSize.x, line.m_offsetPosToUL.y + line.m_size.y + spacingSize.y);
-
-				if (m_bubblePoints.back().x > p0.x)
-				{
-					m_bubblePoints.back() = p0;
-				}
-
-				const Vector2 p1(line.m_offsetPosToUL.x - spacingSize.x, line.m_offsetPosToUL.y - spacingSize.y);
-				m_bubblePoints.push_back(p1);
+				m_bubblePoints.back() = p0;
 			}
 
+			const Vector2 p1(line.m_offsetPosToUL.x + line.m_size.x + spacingSize.x, line.m_offsetPosToUL.y + line.m_size.y + spacingSize.y);
+			m_bubblePoints.push_back(p1);
 		}
 	}
 
-	__AdjustBubblePoints();
+	// bottom.
+	{
+		RenderImagine_TextLine& line = m_layouts.back();
+		const Vector2 p0(line.m_offsetPosToUL.x + line.m_size.x + spacingSize.x, line.m_offsetPosToUL.y + line.m_size.y + spacingSize.y);
+		m_bubblePoints.push_back(p0);
+		const Vector2 p1(line.m_offsetPosToUL.x - spacingSize.x, line.m_offsetPosToUL.y + line.m_size.y + spacingSize.y);
+		m_bubblePoints.push_back(p1);
+	}
+
+	// left.
+	{
+		for (std::vector<RenderImagine_TextLine>::reverse_iterator it = m_layouts.rbegin(); it != m_layouts.rend(); ++it)
+		{
+			RenderImagine_TextLine& line = *it;
+			const Vector2 p0(line.m_offsetPosToUL.x - spacingSize.x, line.m_offsetPosToUL.y + line.m_size.y + spacingSize.y);
+
+			if (m_bubblePoints.back().x > p0.x)
+			{
+				m_bubblePoints.back() = p0;
+			}
+
+			const Vector2 p1(line.m_offsetPosToUL.x - spacingSize.x, line.m_offsetPosToUL.y - spacingSize.y);
+			m_bubblePoints.push_back(p1);
+		}
+
+	}
 }
 
-void RenderImagine::__AdjustBubblePoints()
+void RenderImagine::__AdjustBubblePointSegments()
 {
 	const f32 bubbleSize = m_layouts.front().m_size.y;
 
 	// add / remove points to ensure spacing.
 	{
 		const f32 magSqMin = bubbleSize * bubbleSize;
-		const f32 magSqMax = magSqMin * 4.5f;
+		const f32 magSqMax = magSqMin * 4.f;
 
 		std::vector<Vector2>::iterator it = m_bubblePoints.begin();
 		while ((it != m_bubblePoints.end()) && ((it + 1) != m_bubblePoints.end()))
@@ -386,7 +390,10 @@ void RenderImagine::__AdjustBubblePoints()
 				pC01.Normalize();
 				const Vector2 pI = p01 + (pC01 * (bubbleSize * .1f));
 				it = m_bubblePoints.insert(it + 1, pI);
-				--it;
+
+				const f32 magSqVI = (pI - p0).MagSq();
+				if (magSqVI > magSqMax)
+					--it;
 			}
 			else
 			{
@@ -394,6 +401,43 @@ void RenderImagine::__AdjustBubblePoints()
 			}
 		}
 	}
+}
+
+void RenderImagine::__AdjustBubblePointSpacing()
+{
+	// even out distances.
+	for (std::vector<Vector2>::iterator it = m_bubblePoints.begin();
+		(it != m_bubblePoints.end()) && ((it + 1) != m_bubblePoints.end()) && ((it + 2) != m_bubblePoints.end());
+		++it)
+	{
+		const Vector2& p0 = *(it);
+		const Vector2& p1 = *(it + 1);
+		const Vector2& p2 = *(it + 2);
+
+		const Vector2 v0 = p1 - p0;
+		const Vector2 v1 = p1 - p2;
+
+		const f32 len0 = v0.Mag();
+		const f32 len1 = v1.Mag();
+
+		const f32 lenA = (len0 + len1) / 2.f;
+
+		Vector2 v0u = v0;
+		v0u.Normalize();
+
+		Vector2 v1u = v1;
+		v1u.Normalize();
+
+		const Vector2 v0b = p0 + (v0u * lenA);
+		const Vector2 v1b = p2 + (v1u * lenA);
+
+		*(it + 1) = (v0b + v1b) / 2.f;
+	}
+}
+
+void RenderImagine::__AdjustBubblePointConvex()
+{
+	const f32 bubbleSize = m_layouts.front().m_size.y;
 
 	// ensure it's convex.
 	bool foundConcave = true;
@@ -423,6 +467,91 @@ void RenderImagine::__AdjustBubblePoints()
 			pC1.Normalize();
 			*(it + 1) = p1 + (pC1 * (bubbleSize * .1f));
 		}
+	}
+}
+
+void RenderImagine::__AddCircles()
+{
+	// compute a normal to the center.
+	const Vector2 posTarget(m_posToCenter.x + m_textSize.x / 4, m_posToCenter.y);
+	Vector2 n = posTarget;
+	n.Normalize();
+
+	// make a list of points the circles could potentially collide with.
+	std::vector<Vector2> collisionPoints;
+	collisionPoints.reserve(m_bubblePoints.size() / 2);
+	for (std::vector<Vector2>::iterator it = m_bubblePoints.begin(); it != m_bubblePoints.end() && ((it + 1) != m_bubblePoints.end()); ++it)
+	{
+		const Vector2& p0 = *(it);
+		const Vector2& p4 = *(it + 1);
+		const Vector2 pN = Vector2::NormalL(p0, p4) / 2.f;
+		const Vector2& p2 = ((p0 + p4) / 2.f) + pN;
+
+		Vector2 pNn = pN;
+		pNn.Normalize();
+		const f32 d2 = Vector2::Dot(Vector2(0.f, 0.f) - p2, pNn);
+		if (d2 < 0.f)
+			continue;
+
+		collisionPoints.push_back(p2);
+	}
+
+	// add circles that fit in the bubble.
+	const f32 circleIncrement = m_layouts.front().m_size.y / 8.f;
+	f32 radius = circleIncrement;
+	f32 dist = radius * 2.f;
+	m_circles.reserve(CIRCLE_COUNT * 2);
+	Vector2 pC = n * radius;
+	f32 collideDist = posTarget.Mag();
+	while (true)
+	{
+		// does the circle collide with any bubble points?
+		for (std::vector<Vector2>::iterator it = collisionPoints.begin(); (it != collisionPoints.end()) && ((it + 1) != collisionPoints.end()); ++it)
+		{
+			const Vector2& p0 = *(it);
+			const Vector2& p1 = *(it + 1);
+			const Vector2 v0C = pC - p0;
+			const Vector2 v1C = pC - p1;
+
+			Vector2 vA = p1 - p0;
+			vA.Normalize();
+
+			Vector2 vB = Vector2::NormalL(p0, p1);
+			vB.Normalize();
+
+			const f32 d0 = Vector2::Dot(v0C, vA); // distance from p0 -> pC along vA.
+			const f32 d1 = Vector2::Dot(v1C, vA); // distance from p1 -> pC along vA.
+
+			// is the circle between the two points?
+			if ((d0 < -radius) || (d1 > radius))
+				continue;
+
+			const f32 dC = Vector2::Dot(v0C, vB); // distance from p0 -> pC along vB.
+			collideDist = std::min<f32>(collideDist, dC);
+		}
+
+		if (collideDist < radius)
+			break;
+
+		m_circles.emplace_back();
+		RenderImagine_Circle& circle = m_circles.back();
+
+		circle.m_offsetPosToCenter = pC;
+		circle.m_radius = radius;
+
+		pC += n * (radius * 2.5f + circleIncrement);
+		radius += circleIncrement;
+		dist += (radius * 2.f);
+	}
+
+	// spread out the circles
+	const f32 spread = (radius + collideDist) / static_cast<f32>(m_circles.size());
+	f32 extra = spread;
+	for (std::vector<RenderImagine_Circle>::iterator it = m_circles.begin() + 1; it != m_circles.end(); ++it)
+	{
+		RenderImagine_Circle& circle = *it;
+		circle.m_offsetPosToCenter += (n * extra);
+		extra += spread;
 	}
 }
 

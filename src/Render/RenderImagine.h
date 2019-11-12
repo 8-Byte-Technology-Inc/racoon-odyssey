@@ -48,7 +48,11 @@ protected:
 	void __ComputeLayout_Text();
 	void __ComputeBubbleGeometry();
 	void __CleanupLayouts();
-	void __AdjustBubblePoints();
+	void __AddBubblePoints();
+	void __AdjustBubblePointSegments();
+	void __AdjustBubblePointSpacing();
+	void __AdjustBubblePointConvex();
+	void __AddCircles();
 
 	RenderMain*								m_pRenderer;
 
@@ -56,6 +60,7 @@ protected:
 	std::vector<RenderImagine_TextLine>		m_layouts;
 	std::vector<RenderImagine_Circle>		m_circles;
 	Vector2									m_posToCenter;
+	Vector2									m_textSize;
 	std::vector<Vector2>					m_bubblePoints;
 	ID2D1PathGeometry*						m_pBubbleGeometry;
 

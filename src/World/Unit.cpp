@@ -30,6 +30,7 @@ static const char* s_mooeyThoughts[] =
 	"I miss my bed ...",
 	"I wonder if the farmer's blueberries are ripe?",
 	"I wonder where I am?  I can't see the barn from here.",
+	"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Morbi non arcu risus quis varius quam quisque id. Elit eget gravida cum sociis natoque penatibus et magnis. Enim eu turpis egestas pretium aenean pharetra. Maecenas volutpat blandit aliquam etiam erat velit scelerisque in dictum. Senectus et netus et malesuada fames ac. Nunc sed augue lacus viverra vitae congue eu. Integer feugiat scelerisque varius morbi enim nunc faucibus. Quis eleifend quam adipiscing vitae proin sagittis. Commodo ullamcorper a lacus vestibulum sed arcu non odio euismod. Varius quam quisque id diam. Odio euismod lacinia at quis risus sed. Feugiat pretium nibh ipsum consequat nisl vel.",
 };
 
 World_Unit* World_Unit::Alloc(Client_Globals* pGlobalState)

@@ -111,7 +111,8 @@ struct Vector2
 	f32 y;
 
 	bool operator ==(const Vector2& rhs) const { return x == rhs.x && y == rhs.y; }
-	Vector2& operator -= (const Vector2& rhs) { x += rhs.x; y += rhs.y; return *this; }
+	Vector2& operator -= (const Vector2& rhs) { x -= rhs.x; y -= rhs.y; return *this; }
+	Vector2& operator += (const Vector2& rhs) { x += rhs.x; y += rhs.y; return *this; }
 	void Normalize();
 	f32 MagSq() const { return x * x + y * y; }
 	f32 Mag() const { return static_cast<f32>(sqrt(MagSq())); }
