@@ -38,6 +38,10 @@ float4 GenericPixelShader(PixelInputType input) : SV_TARGET
 	float NdotL = max(0, dot(input.normalWC, lightVectorWorld));
 
 	// determine final color.
-	return outColor * (0.8 + (NdotL * .4));
+	float4 final = outColor * (0.8 + (NdotL * .4));
+
+	// don't mess with alpha.
+	final.w = outColor.w;
+	return final;
 }
 
