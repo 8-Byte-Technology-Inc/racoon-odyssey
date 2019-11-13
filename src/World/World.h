@@ -12,8 +12,10 @@ namespace TB8
 
 struct World_Object;
 struct World_Unit;
+struct World_Avatar;
 class RenderModel;
 class RenderImagine;
+class RenderStatusBars;
 
 class World : public Client_Globals_Accessor
 {
@@ -53,7 +55,7 @@ protected:
 
 	std::multimap<IVector2, World_Object*>		m_objects;
 
-	World_Unit*									m_pCharacterObj;
+	World_Avatar*								m_pCharacterObj;
 };
 
 

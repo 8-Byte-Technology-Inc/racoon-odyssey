@@ -42,6 +42,7 @@
     <ClInclude Include="RenderModel.h" />
     <ClInclude Include="RenderScale.h" />
     <ClInclude Include="RenderShaders.h" />
+    <ClInclude Include="RenderStatusBars.h" />
     <ClInclude Include="RenderTexture.h" />
   </ItemGroup>
   <ItemGroup>
@@ -55,6 +56,7 @@
     <ClCompile Include="RenderModel_DAE.cpp" />
     <ClCompile Include="RenderScale.cpp" />
     <ClCompile Include="RenderShaders.cpp" />
+    <ClCompile Include="RenderStatusBars.cpp" />
     <ClCompile Include="RenderTexture.cpp" />
   </ItemGroup>
   <ItemGroup>

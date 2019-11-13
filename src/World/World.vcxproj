@@ -35,6 +35,7 @@
   <Import Project="$(SolutionDir)\Racoon-Odyssey.props" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ItemGroup>
+    <ClInclude Include="Avatar.h" />
     <ClInclude Include="Bounds.h" />
     <ClInclude Include="Object.h" />
     <ClInclude Include="pch.h" />
@@ -42,6 +43,7 @@
     <ClInclude Include="World.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Avatar.cpp" />
     <ClCompile Include="Bounds.cpp" />
     <ClCompile Include="Object.cpp" />
     <ClCompile Include="pch.cpp">

@@ -1,7 +1,5 @@
 #include "pch.h"
 
-#include <cmath>
-
 #include "common/memory.h"
 #include "common/parse_xml.h"
 #include "common/string.h"
@@ -12,9 +10,12 @@
 #include "render/RenderMain.h"
 #include "render/RenderModel.h"
 #include "render/RenderImagine.h"
+#include "render/RenderTexture.h"
+#include "render/RenderStatusBars.h"
 
 #include "Object.h"
 #include "Unit.h"
+#include "Avatar.h"
 #include "World.h"
 
 namespace TB8
@@ -75,9 +76,10 @@ void World::LoadCharacter(const char* pszCharacterModelPath, const char* pszMode
 	const RenderModel_Mesh& mesh = meshes.front();
 	const RenderModel_Bounds& meshBounds = mesh.m_bounds;
 
-	m_pCharacterObj = World_Unit::Alloc(__GetGlobals());
+	m_pCharacterObj = World_Avatar::Alloc(__GetGlobals(), pszCharacterModelPath);
 
 	m_pCharacterObj->m_modelID = 0;
+	m_pCharacterObj->m_type = World_Object_Type_Avatar;
 	m_pCharacterObj->m_pModel = pModel;
 	// scale the model so <y> is 0.75 meters.
 	m_pCharacterObj->m_pos = m_startPos;
@@ -99,6 +101,8 @@ void World::Update(s32 frameCount)
 
 	// update.
 	m_pCharacterObj->UpdatePosition(frameCount, pos, vel);
+
+	m_pCharacterObj->Update(frameCount);
 }
 
 void World::Render3D(RenderMain* pRenderer)
@@ -341,7 +345,10 @@ void World::__ParseMapStartElement(const u8* pszName, const u8** ppAttribs)
 			{
 				std::string texturePath = m_mapPath;
 				TB8::File::AppendToPath(texturePath, pszPath);
-				pModel = RenderModel::AllocSquareFromTexture(__GetRenderer(), Vector3(0.f, 0.f, 1.f), Vector3(1.f, 0.f, 0.f), texturePath.c_str());
+				RenderTexture* pTexture = RenderTexture::Alloc(__GetRenderer(), texturePath.c_str());
+				pModel = RenderModel::AllocSimpleRectangle(__GetRenderer(), RenderMainViewType_World, Vector3(0.f, 0.f, 1.f), Vector3(1.f, 0.f, 0.f), 
+															pTexture, Vector2(0.f, 0.f), Vector2(1.f, 1.f));
+				RELEASEI(pTexture);
 			}
 			else if ((_strcmpi(pszType, "dae") == 0) && pszModel)
 			{
@@ -387,6 +394,7 @@ void World::__ParseMapStartElement(const u8* pszName, const u8** ppAttribs)
 				{
 					World_Object* pObj = World_Object::Alloc(__GetGlobals());
 					pObj->m_modelID = defaultTile;
+					pObj->m_type = World_Object_Type_Tile;
 					pObj->m_pModel = itModel->second;
 					pObj->m_scale = 1.f;
 					pObj->m_rotation = 0.f;
@@ -484,6 +492,7 @@ void World::__ParseMapStartElement(const u8* pszName, const u8** ppAttribs)
 							const RenderModel_Bounds& meshBounds = mesh.m_bounds;
 
 							pObj->m_modelID = modelID;
+							pObj->m_type = World_Object_Type_Wall;
 							pObj->m_pos = Vector3(static_cast<f32>(pos.x) + offset.x, static_cast<f32>(pos.y) + offset.y, 0.f);
 							pObj->m_scale = 1.0f / meshBounds.m_size.x;
 							pObj->m_rotation = rotation;

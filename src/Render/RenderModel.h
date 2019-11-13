@@ -21,6 +21,7 @@ struct RenderModel_DAE_Triangle;
 struct RenderModel_DAE_SkinJoint;
 struct RenderModel_DAE_Anim_Transform;
 struct RenderModel_DAE_Mesh;
+enum RenderMainViewType : u32;
 
 struct RenderModel_VertexPositionTexture
 {
@@ -111,8 +112,8 @@ public:
 	~RenderModel();
 
 	static RenderModel* Alloc(RenderMain* pRenderer, s32 vertexCount, RenderModel_VertexPositionTexture* verticies, s32 indexCount, u16* indicies, const Vector4& color);
-	static RenderModel* AllocSquareFromTexture(RenderMain* pRenderer, const Vector3& v0, const Vector3& v1, const char* pszTexturePath);
 	static RenderModel* AllocFromDAE(RenderMain* pRenderer, const char* path, const char* file, const char* modelName);
+	static RenderModel* AllocSimpleRectangle(RenderMain* pRenderer, RenderMainViewType viewType, const Vector3& v0, const Vector3& v1, RenderTexture* pTexture, const Vector2& uv0, const Vector2& uv1);
 
 	void SetPosition(const Vector3& position);
 	void SetRotation(const Vector3& rotation);
@@ -141,8 +142,8 @@ public:
 
 private:
 	void __Initialize(RenderMain* pRenderer, s32 vertexCount, RenderModel_VertexPositionTexture* verticies, s32 indexCount, u16* indicies, const Vector4& color);
-	void __InitializeSquareFromTexture(RenderMain* pRenderer, const Vector3& v0, const Vector3& v1, const char* pszTexturePath);
 	void __InitializeFromDAE(RenderMain* pRenderer, const char* path, const char* file, const char* modelName);
+	void __InitializeSimpleRectangle(RenderMain* pRenderer, RenderMainViewType viewType, const Vector3& v0, const Vector3& v1, RenderTexture* pTexture, const Vector2& uv0, const Vector2& uv1);
 
 	virtual void __Free() override;
 
@@ -229,6 +230,8 @@ private:
 	RenderModel_Joint						m_joints[16];
 
 	std::vector<RenderModel_Mesh>			m_meshes;
+
+	RenderMainViewType						m_viewType;
 
 	ID3D11Buffer*							m_pVSConstantBuffer_World;
 	ID3D11Buffer*							m_pVSConstantBuffer_Anim;

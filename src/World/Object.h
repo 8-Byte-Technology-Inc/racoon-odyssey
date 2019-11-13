@@ -11,6 +11,14 @@ namespace TB8
 
 class RenderModel;
 
+enum World_Object_Type
+{
+	World_Object_Type_Tile = 0,
+	World_Object_Type_Wall,
+	World_Object_Type_Unit,
+	World_Object_Type_Avatar,
+};
+
 struct World_Object : public Client_Globals_Accessor
 {
 	World_Object(Client_Globals* pGlobalState)
@@ -46,6 +54,7 @@ struct World_Object : public Client_Globals_Accessor
 	void __InterpolateAnims(s32 animID0, s32 animID1, f32 t);
 
 	u32								m_modelID;
+	World_Object_Type				m_type;
 	RenderModel*					m_pModel;
 	Vector3							m_center;
 	Vector3							m_offset;

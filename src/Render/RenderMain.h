@@ -9,6 +9,7 @@ namespace TB8
 
 class RenderModelGroup;
 class RenderShader;
+class RenderShader_ConstantBuffer;
 enum RenderShaderID : u32;
 enum RenderScaleSize : u32;
 
@@ -30,6 +31,7 @@ enum RenderFontID : u32
 	RenderFontID_Unknown = 0,
 
 	RenderFontID_Imagine = 1,
+	RenderFontID_StatusBar = 2,
 
 	RenderFontID_COUNT,
 
@@ -52,6 +54,32 @@ struct RenderMainFont
 	s32							m_weight;
 	RenderFontDirection			m_direction;
 	IDWriteTextFormat*			m_pFont;
+};
+
+enum RenderMainViewType : u32
+{
+	RenderMainViewType_World = 0,
+	RenderMainViewType_UI,
+};
+
+struct RenderMainView
+{
+	RenderMainView()
+		: m_pConstantBuffer(nullptr)
+	{
+		m_viewMatrix.SetIdentity();
+		m_projectionMatrix.SetIdentity();
+		m_worldToScreen.SetIdentity();
+		m_screenToWorld.SetIdentity();
+	};
+
+	RenderShader_ConstantBuffer*	m_pConstantBuffer;
+
+	Matrix4							m_viewMatrix;
+	Matrix4							m_projectionMatrix;
+
+	Matrix4							m_worldToScreen;
+	Matrix4							m_screenToWorld;
 };
 
 class RenderMain : public Client_Globals_Accessor
@@ -83,14 +111,12 @@ public:
 	void BeginDraw();
 	void EndDraw();
 
-	void SetViewMatrix(const Matrix4& viewMatrix);
-	void SetProjectionMatrix(const Matrix4& projectionMatrix);
+	void SetViewMatrix(RenderMainViewType t, const Matrix4& viewMatrix, const Matrix4& projectionMatrix);
+	RenderShader_ConstantBuffer* GetViewConstantBuffer(RenderMainViewType t) { return m_views[t].m_pConstantBuffer; }
+
 	void SetLightVector(const Vector3& lightVector);
 
 	RenderShader*	GetShaderByID(RenderShaderID shaderID);
-
-	const Matrix4&	GetViewMatrix() const { return m_viewMatrix; }
-	const Matrix4&	GetProjectionMatrix() const { return m_projectionMatrix; }
 
 	void			SetBGColor(u32 rgba);
 
@@ -125,7 +151,9 @@ private:
 	void __ReleaseBuffers();
 	void __ResizeBuffers();
 	void __SetScreenSizePixels(const IVector2& size, s32 dpi);
-	void __ConfigureTransforms();
+	void __ConfigureViews();
+	void __ConfigureView_World();
+	void __ConfigureView_UI();
 
 	void __EventHandler(EventMessage* message);
 	void __EventResizeWindow(class EventMessage_ResizeWindow* event);
@@ -154,13 +182,11 @@ private:
 	ID3D11DepthStencilState*	m_pDepthStencilState;
 	ID3D11DepthStencilView*		m_pDepthStencilView;
 	ID3D11RasterizerState*		m_pRasterizerState;
+	ID3D11BlendState*			m_pBlendState;
 
-	Matrix4						m_projectionMatrix;
-	Matrix4						m_viewMatrix;
+	std::vector<RenderMainView>	m_views;
+
 	Vector3						m_lightVector;
-
-	Matrix4						m_worldToScreen;
-	Matrix4						m_screenToWorld;
 
 	float						m_bgColor[4];
 

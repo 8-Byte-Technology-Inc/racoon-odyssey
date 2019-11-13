@@ -12,6 +12,8 @@ namespace TB8
 
 class RenderTexture;
 class RenderMain;
+class RenderShader_ConstantBuffer;
+class RenderShader;
 
 enum RenderShaderID : u32
 {
@@ -45,6 +47,27 @@ struct RenderShaders_Model_VSConstantants_Joints
 	DirectX::XMFLOAT4X4 jointNormalMatrix[16];
 };
 
+class RenderShader_ConstantBuffer : public TB8::ref_count
+{
+public:
+	static RenderShader_ConstantBuffer* AllocView(RenderMain* pRenderer);
+
+	RenderShader_ConstantBuffer(RenderMain* pRenderer);
+	~RenderShader_ConstantBuffer();
+
+	void SetView(const Matrix4& view, const Matrix4& projection);
+
+private:
+	friend RenderShader;
+
+	void __InitializeView(RenderMain* renderer);
+	void __Uninitialize();
+	virtual void __Free() override;
+
+	RenderMain*		m_pRenderer;
+	ID3D11Buffer*	m_pVSConstantBuffer;
+};
+
 class RenderShader : public TB8::ref_count
 {
 public:
@@ -55,8 +78,7 @@ public:
 
 	RenderShaderID GetID() const { return m_id; }
 
-	void SetViewTransform(const Matrix4& view);
-	void SetProjectionTransform(const Matrix4& view);
+	void SetViewConstantBuffer(RenderShader_ConstantBuffer* pConstantBuffer);
 	void SetLightVector(const Vector3& vector);
 
 	void SetTexture(RenderTexture* pTextures);
@@ -69,7 +91,6 @@ public:
 
 private:
 	void __Initialize(const char* path, const char* vertexFileName, const char* pixelFileName);
-	void __UpdateVSConstants();
 	void __UpdatePSConstants();
 	void __Shutdown();
 	virtual void __Free() override;
@@ -85,7 +106,7 @@ private:
 	ID3D11VertexShader*						m_pVertexShader;
 	ID3D11InputLayout*						m_pInputLayout;
 	ID3D11PixelShader*						m_pPixelShader;
-	ID3D11Buffer*							m_pVSConstantBuffer_View;	// world (view, projection)
+	RenderShader_ConstantBuffer*			m_pVSConstantBuffer_View;	// world (view, projection)
 	ID3D11Buffer*							m_pVSConstantBuffer_World;	// model (model -> world, normal)
 	ID3D11Buffer*							m_pVSConstantBuffer_Anim;	// model (anim index)
 	ID3D11Buffer*							m_pVSConstantBuffer_Joints;	// model (joints)

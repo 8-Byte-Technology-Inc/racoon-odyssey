@@ -25,6 +25,7 @@
 #include <vector>
 #include <map>
 #include <algorithm>
+#include <cmath>
 
 #include "common/basic_types.h"
 #include "common/memory.h"

@@ -39,6 +39,7 @@ RenderMain::RenderMain(HWND hWnd, Client_Globals* pGlobalState)
 	, m_pDepthStencilState(nullptr)
 	, m_pDepthStencilView(nullptr)
 	, m_pRasterizerState(nullptr)
+	, m_pBlendState(nullptr)
 	, m_lightVector(0.f, -1.f, 0.f)
 {
 	// default, unless overridden.
@@ -46,9 +47,6 @@ RenderMain::RenderMain(HWND hWnd, Client_Globals* pGlobalState)
 	m_bgColor[1] = 0.500f;
 	m_bgColor[2] = 0.500f;
 	m_bgColor[3] = 1.000f;
-
-	m_viewMatrix.SetIdentity();
-	m_projectionMatrix.SetIdentity();
 }
 
 RenderMain::~RenderMain()
@@ -78,38 +76,14 @@ RenderShader* RenderMain::GetShaderByID(RenderShaderID shaderID)
 	return m_shaders[shaderID - 1];
 }
 
-void RenderMain::SetViewMatrix(const Matrix4& viewMatrix) 
-{ 
-	if (m_viewMatrix == viewMatrix)
-		return;
+void RenderMain::SetViewMatrix(RenderMainViewType t, const Matrix4& viewMatrix, const Matrix4& projectionMatrix)
+{
+	assert(t < m_views.size());
 
-	m_viewMatrix = viewMatrix;
-
-	for (std::vector<RenderShader*>::iterator it = m_shaders.begin(); it != m_shaders.end(); ++it)
-	{
-		RenderShader* pShader = *it;
-		if (pShader)
-		{
-			pShader->SetViewTransform(viewMatrix);
-		}
-	}
-}
-
-void RenderMain::SetProjectionMatrix(const Matrix4& projectionMatrix) 
-{ 
-	if (m_projectionMatrix == projectionMatrix)
-		return;
-
-	m_projectionMatrix = projectionMatrix;
-
-	for (std::vector<RenderShader*>::iterator it = m_shaders.begin(); it != m_shaders.end(); ++it)
-	{
-		RenderShader* pShader = *it;
-		if (pShader)
-		{
-			pShader->SetProjectionTransform(projectionMatrix);
-		}
-	}
+	RenderMainView& view = m_views[t];
+	view.m_viewMatrix = viewMatrix;
+	view.m_projectionMatrix = projectionMatrix;
+	view.m_pConstantBuffer->SetView(view.m_viewMatrix, view.m_projectionMatrix);
 }
 
 void RenderMain::SetLightVector(const Vector3& lightVector)
@@ -164,6 +138,7 @@ void RenderMain::__Shutdown()
 	m_shaders.clear();
 	__ClearFonts();
 
+	RELEASEI(m_pBlendState);
 	RELEASEI(m_pRasterizerState);
 	RELEASEI(m_pDepthStencilView);
 	RELEASEI(m_pDepthStencilState);
@@ -320,7 +295,7 @@ void RenderMain::__Initialize()
 	__InitFonts();
 
 	// configure transforms.
-	__ConfigureTransforms();
+	__ConfigureViews();
 }
 
 struct RenderFontInfo
@@ -336,6 +311,7 @@ struct RenderFontInfo
 static RenderFontInfo s_renderFontInfo[] =
 {
 	{ RenderFontID_Imagine, "uif_imagine", "Verdana", 18, 400, RenderFontDirection_LeftToRight },
+	{ RenderFontID_StatusBar, "uif_statusbar", "Verdana", 12, 400, RenderFontDirection_LeftToRight },
 };
 
 void RenderMain::__InitFonts()
@@ -409,10 +385,26 @@ void RenderMain::__CreateFont(RenderMainFont& fontInfo)
 	}
 }
 
-void RenderMain::__ConfigureTransforms()
+void RenderMain::__ConfigureViews()
 {
+	m_views.resize(2);
+
+	__ConfigureView_World();
+	__ConfigureView_UI();
+
+	// light source
+	{
+		const Vector3 lightVectorWorld(+0.25f, +1.0f, -0.25f);
+
+		SetLightVector(lightVectorWorld);
+	}
+}
+
+void RenderMain::__ConfigureView_World()
+{
+	RenderMainView& viewWorld = m_views[RenderMainViewType_World];
+
 	// view transform; camera position around model.
-	Matrix4 viewMatrix;
 	{
 		Matrix4 matrixRotateX;
 		matrixRotateX.SetRotateX(-DirectX::XM_PI / 8.f);
@@ -420,10 +412,8 @@ void RenderMain::__ConfigureTransforms()
 		Matrix4 matrixRotateZ;
 		matrixRotateZ.SetRotateZ(DirectX::XM_PI / 8.f);
 
-		viewMatrix = matrixRotateZ;
-		viewMatrix = Matrix4::MultiplyAB(viewMatrix, matrixRotateX);
-
-		SetViewMatrix(viewMatrix);
+		viewWorld.m_viewMatrix = matrixRotateZ;
+		viewWorld.m_viewMatrix = Matrix4::MultiplyAB(viewWorld.m_viewMatrix, matrixRotateX);
 	}
 
 	// change coordinate system from world -> directx.
@@ -454,28 +444,25 @@ void RenderMain::__ConfigureTransforms()
 		Matrix4 projectionScale;
 		projectionScale.SetScale(Vector3(scaleX, scaleY, scaleZ));
 
-		projectionMatrix = projectionScale;
-		projectionMatrix = Matrix4::MultiplyAB(projectionMatrix, projectionMoveZ);
-		projectionMatrix = Matrix4::MultiplyAB(projectionMatrix, projectionCoords);
-
-		SetProjectionMatrix(projectionMatrix);
+		viewWorld.m_projectionMatrix = projectionScale;
+		viewWorld.m_projectionMatrix = Matrix4::MultiplyAB(viewWorld.m_projectionMatrix, projectionMoveZ);
+		viewWorld.m_projectionMatrix = Matrix4::MultiplyAB(viewWorld.m_projectionMatrix, projectionCoords);
 	}
 
-	// light source
-	{
-		const Vector3 lightVectorWorld(+0.25f, +1.0f, -0.25f);
+	// create constant buffer.
+	viewWorld.m_pConstantBuffer = RenderShader_ConstantBuffer::AllocView(this);
 
-		SetLightVector(lightVectorWorld);
-	}
+	// set these transforms.
+	viewWorld.m_pConstantBuffer->SetView(viewWorld.m_viewMatrix, viewWorld.m_projectionMatrix);
 
 	// world to screen.
 	{
 		Matrix4 matrixScale;
 		matrixScale.SetScale(Vector3(static_cast<f32>(m_dataRender.m_dpi * 2), static_cast<f32>(m_dataRender.m_dpi * 2), 1.f));
 
-		m_worldToScreen = matrixScale;
-		m_worldToScreen = Matrix4::MultiplyAB(m_worldToScreen, projectionCoords);
-		m_worldToScreen = Matrix4::MultiplyAB(m_worldToScreen, viewMatrix);
+		viewWorld.m_worldToScreen = matrixScale;
+		viewWorld.m_worldToScreen = Matrix4::MultiplyAB(viewWorld.m_worldToScreen, projectionCoords);
+		viewWorld.m_worldToScreen = Matrix4::MultiplyAB(viewWorld.m_worldToScreen, viewWorld.m_viewMatrix);
 	}
 
 	// screen to world.
@@ -496,39 +483,89 @@ void RenderMain::__ConfigureTransforms()
 		Matrix4 matrixScale;
 		matrixScale.SetScale(Vector3(1.f / static_cast<f32>(m_dataRender.m_dpi * 2), 1.f / static_cast<f32>(m_dataRender.m_dpi * 2), 1.f));
 
-		m_screenToWorld = matrixRotateX;
-		m_screenToWorld = Matrix4::MultiplyAB(m_screenToWorld, matrixRotateZ);
-		m_screenToWorld = Matrix4::MultiplyAB(m_screenToWorld, matrixCoords);
-		m_screenToWorld = Matrix4::MultiplyAB(m_screenToWorld, matrixScale);
+		viewWorld.m_screenToWorld = matrixRotateX;
+		viewWorld.m_screenToWorld = Matrix4::MultiplyAB(viewWorld.m_screenToWorld, matrixRotateZ);
+		viewWorld.m_screenToWorld = Matrix4::MultiplyAB(viewWorld.m_screenToWorld, matrixCoords);
+		viewWorld.m_screenToWorld = Matrix4::MultiplyAB(viewWorld.m_screenToWorld, matrixScale);
 	}
+}
+
+void RenderMain::__ConfigureView_UI()
+{
+	RenderMainView& viewUI = m_views[RenderMainViewType_UI];
+
+	const f32 zNear = 1024.f;
+	const f32 zFar = 5120.f;
+	const f32 zMid = (zNear + zFar) / 2.f;
+
+	// view transform; camera position around model.
+	viewUI.m_viewMatrix.SetIdentity();
+
+	// 0,0 is upper left in UI, but -x, -y in DirectX, also pull forward, the UI is in front of everything else.
+	Matrix4 projectionTrans;
+	projectionTrans.SetTranslation(Vector3(-static_cast<f32>(m_dataRender.m_screenSizePixels.x / 2), -static_cast<f32>(m_dataRender.m_screenSizePixels.y / 2), -1024.f));
+
+	// change coordinate system from UI -> directx.
+	Matrix4 projectionCoords;
+	projectionCoords.SetIdentity();
+	projectionCoords.m[1][1] = -1.0f;
+
+	// move 0.0 into the middle of z.
+	Matrix4 projectionMoveZ;
+	projectionMoveZ.SetTranslation(Vector3(0.f, 0.f, zMid - zNear));
+
+	// UI -> directx.
+	f32 scaleX = 2.f / static_cast<f32>(m_dataRender.m_screenSizePixels.x);
+	f32 scaleY = 2.f / static_cast<f32>(m_dataRender.m_screenSizePixels.y);
+	f32 scaleZ = 1.f / (zFar - zNear);
+	Matrix4 projectionScale;
+	projectionScale.SetScale(Vector3(scaleX, scaleY, scaleZ));
+
+	// projection transform; world -> screen coordinates.
+	viewUI.m_projectionMatrix = projectionScale;
+	viewUI.m_projectionMatrix = Matrix4::MultiplyAB(viewUI.m_projectionMatrix, projectionMoveZ);
+	viewUI.m_projectionMatrix = Matrix4::MultiplyAB(viewUI.m_projectionMatrix, projectionCoords);
+	viewUI.m_projectionMatrix = Matrix4::MultiplyAB(viewUI.m_projectionMatrix, projectionTrans);
+
+	// create constant buffer.
+	viewUI.m_pConstantBuffer = RenderShader_ConstantBuffer::AllocView(this);
+
+	// set these transforms.
+	viewUI.m_pConstantBuffer->SetView(viewUI.m_viewMatrix, viewUI.m_projectionMatrix);
 }
 
 void RenderMain::AlignWorldPosition(Vector3& worldPos)
 {
+	RenderMainView& viewWorld = m_views[RenderMainViewType_World];
+
 	// world to screen.
-	Vector3 screenPos = Matrix4::MultiplyVector(worldPos, m_worldToScreen);
+	Vector3 screenPos = Matrix4::MultiplyVector(worldPos, viewWorld.m_worldToScreen);
 	screenPos.x = static_cast<f32>(static_cast<s32>(screenPos.x)) + 0.5f;
 	screenPos.y = static_cast<f32>(static_cast<s32>(screenPos.y)) + 0.5f;
-	worldPos = Matrix4::MultiplyVector(screenPos, m_screenToWorld);
+	worldPos = Matrix4::MultiplyVector(screenPos, viewWorld.m_screenToWorld);
 }
 
 void RenderMain::AlignWorldSize(Vector3& worldSize)
 {
+	RenderMainView& viewWorld = m_views[RenderMainViewType_World];
+
 	// world to screen.
-	Vector3 screenPos = Matrix4::MultiplyVector(worldSize, m_worldToScreen);
+	Vector3 screenPos = Matrix4::MultiplyVector(worldSize, viewWorld.m_worldToScreen);
 	screenPos.x = static_cast<f32>(static_cast<s32>(screenPos.x + 0.5f));
 	screenPos.y = static_cast<f32>(static_cast<s32>(screenPos.y + 0.5f));
-	worldSize = Matrix4::MultiplyVector(screenPos, m_screenToWorld);
+	worldSize = Matrix4::MultiplyVector(screenPos, viewWorld.m_screenToWorld);
 }
 
 void RenderMain::AlignScreenSize(IVector2& screenSize)
 {
+	RenderMainView& viewWorld = m_views[RenderMainViewType_World];
+
 	Vector3 screenPos(static_cast<f32>(screenSize.x), static_cast<f32>(screenSize.y), 0.f);
-	Vector3 worldSize = Matrix4::MultiplyVector(screenPos, m_screenToWorld);
+	Vector3 worldSize = Matrix4::MultiplyVector(screenPos, viewWorld.m_screenToWorld);
 	worldSize.x = static_cast<f32>(static_cast<s32>((worldSize.x * 10.f) + 0.5f)) / 10.f;
 	worldSize.y = static_cast<f32>(static_cast<s32>((worldSize.y * 10.f) + 0.5f)) / 10.f;
 	worldSize.z = static_cast<f32>(static_cast<s32>((worldSize.z * 10.f) + 0.5f)) / 10.f;
-	Vector3 screenSize2 = Matrix4::MultiplyVector(worldSize, m_worldToScreen);
+	Vector3 screenSize2 = Matrix4::MultiplyVector(worldSize, viewWorld.m_worldToScreen);
 	screenSize.x = static_cast<s32>(screenSize2.x);
 	screenSize.y = static_cast<s32>(screenSize2.y);
 
@@ -538,8 +575,10 @@ void RenderMain::AlignScreenSize(IVector2& screenSize)
 
 Vector2 RenderMain::WorldToScreenCoords(const Vector3& worldCoords)
 {
+	RenderMainView& viewWorld = m_views[RenderMainViewType_World];
+
 	// this is centered on the middle of the screen.
-	const Vector3 screenCoordsDX = Matrix4::MultiplyVector(worldCoords, m_worldToScreen);
+	const Vector3 screenCoordsDX = Matrix4::MultiplyVector(worldCoords, viewWorld.m_worldToScreen);
 
 	// convert relative to UL.
 	return Vector2(((static_cast<f32>(m_dataRender.m_screenSizePixels.x) / 2.f) + screenCoordsDX.x),
@@ -696,6 +735,26 @@ void RenderMain::__ConfigureBuffers_D3D()
 	assert(hr == S_OK);
 	m_pD3DDeviceContext->RSSetState(m_pRasterizerState);
 
+	// set blend state.
+	D3D11_BLEND_DESC blendDesc;
+	ZeroMemory(&blendDesc, sizeof(blendDesc));
+	blendDesc.RenderTarget[0].BlendEnable = true;
+	blendDesc.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+	blendDesc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+	blendDesc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+	blendDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ZERO;
+	blendDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
+	blendDesc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+	blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+
+	hr = m_pD3DDevice->CreateBlendState(
+		&blendDesc,
+		&m_pBlendState
+	);
+	assert(hr == S_OK);
+	f32 blendFactor[4] = { 0.f, 0.f, 0.f, 0.f };
+	m_pD3DDeviceContext->OMSetBlendState(m_pBlendState, blendFactor, 0xffffffff);
+
 	// Now set the viewport.
 	D3D11_VIEWPORT viewport;
 	viewport.Width = static_cast<float>(m_bbDesc.Width);
@@ -741,6 +800,7 @@ void RenderMain::__ConfigureBuffers_D2D()
 
 void RenderMain::__ReleaseBuffers()
 {
+	RELEASEI(m_pBlendState);
 	RELEASEI(m_pRasterizerState);
 	RELEASEI(m_pDepthStencilView);
 	RELEASEI(m_pDepthStencilState);
@@ -862,7 +922,7 @@ void RenderMain::__EventResizeWindow(EventMessage_ResizeWindow* event)
 	__ResizeBuffers();
 
 	// update various transforms.
-	__ConfigureTransforms();
+	__ConfigureViews();
 }
 
 }

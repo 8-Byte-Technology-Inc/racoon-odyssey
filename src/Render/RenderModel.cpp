@@ -48,6 +48,7 @@ RenderModel::RenderModel(RenderMain* pRenderer)
 	, m_cJoints(0)
 	, m_isJointsDirty(false)
 	, m_pBoneTexture(nullptr)
+	, m_viewType(RenderMainViewType_World)
 	, m_pVSConstantBuffer_World(nullptr)
 	, m_pVSConstantBuffer_Anim(nullptr)
 	, m_pVSConstantBuffer_Joints(nullptr)
@@ -75,10 +76,10 @@ RenderModel::~RenderModel()
 	return obj;
 }
 
-/* static */ RenderModel* RenderModel::AllocSquareFromTexture(RenderMain* pRenderer, const Vector3& v0, const Vector3& v1, const char* pszTexturePath)
+/* static */ RenderModel* RenderModel::AllocSimpleRectangle(RenderMain* pRenderer, RenderMainViewType viewType, const Vector3& v0, const Vector3& v1, RenderTexture* pTexture, const Vector2& uv0, const Vector2& uv1)
 {
 	RenderModel* obj = TB8_NEW(RenderModel)(pRenderer);
-	obj->__InitializeSquareFromTexture(pRenderer, v0, v1, pszTexturePath);
+	obj->__InitializeSimpleRectangle(pRenderer, viewType, v0, v1, pTexture, uv0, uv1);
 	return obj;
 }
 
@@ -128,6 +129,9 @@ void RenderModel::Render(RenderMain* pRenderer)
 	{
 		__UpdateVSConstants_Joints();
 	}
+
+	// set view.
+	m_pShader->SetViewConstantBuffer(m_pRenderer->GetViewConstantBuffer(m_viewType));
 
 	// set model constants, which includes the world transform & animation index.
 	m_pShader->SetModelVSConstants_World(m_pVSConstantBuffer_World);
@@ -521,16 +525,20 @@ void RenderModel::__Initialize(RenderMain* pRenderer, s32 vertexCount, RenderMod
 	assert(!"not yet implemented !");
 }
 
-void RenderModel::__InitializeSquareFromTexture(RenderMain* pRenderer, const Vector3& v0, const Vector3& v1, const char* pszTexturePath)
+void RenderModel::__InitializeSimpleRectangle(RenderMain* pRenderer, RenderMainViewType viewType, const Vector3& v0, const Vector3& v1, RenderTexture* pTexture, const Vector2& uv0, const Vector2& uv1)
 {
 	HRESULT hr = S_OK;
+
+	// set view type.
+	m_viewType = viewType;
 
 	// get a reference to the shader.
 	m_pShader = pRenderer->GetShaderByID(RenderShaderID_Generic);
 	m_pShader->AddRef();
 
-	// load texture.
-	m_pTexture = RenderTexture::Alloc(pRenderer, pszTexturePath);
+	// cache texture.
+	m_pTexture = pTexture;
+	m_pTexture->AddRef();
 
 	const Vector3 vo(0.f, 0.f, 0.f);
 
@@ -546,7 +554,7 @@ void RenderModel::__InitializeSquareFromTexture(RenderMain* pRenderer, const Vec
 	// v0
 	RenderShader_Vertex_Generic vertex;
 	Vector2 targetTexPos;
-	m_pTexture->MapUV(0, Vector2(0.f, 0.f), &targetTexPos);
+	m_pTexture->MapUV(0, uv0, &targetTexPos);
 	vertex.position.x = vo.x;
 	vertex.position.y = vo.y;
 	vertex.position.z = vo.z;
@@ -561,7 +569,7 @@ void RenderModel::__InitializeSquareFromTexture(RenderMain* pRenderer, const Vec
 	verticies.push_back(vertex);
 
 	// v1
-	m_pTexture->MapUV(0, Vector2(1.f, 0.f), &targetTexPos);
+	m_pTexture->MapUV(0, Vector2(uv1.x, uv0.y), &targetTexPos);
 	vertex.position.x = v0.x;
 	vertex.position.y = v0.y;
 	vertex.position.z = v0.z;
@@ -570,7 +578,7 @@ void RenderModel::__InitializeSquareFromTexture(RenderMain* pRenderer, const Vec
 	verticies.push_back(vertex);
 
 	// v2
-	m_pTexture->MapUV(0, Vector2(1.f, 1.f), &targetTexPos);
+	m_pTexture->MapUV(0, Vector2(uv1.x, uv1.y), &targetTexPos);
 	vertex.position.x = v0.x + v1.x;
 	vertex.position.y = v0.y + v1.y;
 	vertex.position.z = v0.z + v1.z;
@@ -579,7 +587,7 @@ void RenderModel::__InitializeSquareFromTexture(RenderMain* pRenderer, const Vec
 	verticies.push_back(vertex);
 
 	// v3
-	m_pTexture->MapUV(0, Vector2(0.f, 1.f), &targetTexPos);
+	m_pTexture->MapUV(0, Vector2(uv0.x, uv1.y), &targetTexPos);
 	vertex.position.x = v1.x;
 	vertex.position.y = v1.y;
 	vertex.position.z = v1.z;

@@ -1,7 +1,5 @@
 #include "pch.h"
 
-#include <cmath>
-
 #include "render/RenderMain.h"
 #include "render/RenderModel.h"
 #include "render/RenderImagine.h"
@@ -80,7 +78,6 @@ void World_Unit::ComputeNextPosition(s32 frameCount, Vector3& pos, Vector3& vel)
 	const f32 windResistFactor = 0.25f;
 	const f32 gravityFactor = 10.0f;
 	const f32 elapsedTime = static_cast<f32>(frameCount) / 60.f;
-	const f32 velocityMax = 5.f; // m/s.
 
 	// process jumping.
 	if (!is_approx_zero(m_force.z))
@@ -110,10 +107,20 @@ void World_Unit::ComputeNextPosition(s32 frameCount, Vector3& pos, Vector3& vel)
 	// compute new velocity.
 	vel = m_velocity + (accel * elapsedTime);
 
-	// don't exceed max velocity.
-	vel.x = std::min<f32>(abs(vel.x), velocityMax) * get_sign(vel.x);
-	vel.y = std::min<f32>(abs(vel.y), velocityMax) * get_sign(vel.y);
-	vel.z = std::min<f32>(abs(vel.z), velocityMax) * get_sign(vel.z);
+	// don't exceed max velocity, unless it's gravity.
+	if (vel.MagSq() > (m_maxVelocity * m_maxVelocity))
+	{
+		const Vector3 velN = vel.Normalize(vel) * m_maxVelocity;
+		if (vel.z < 0.f)
+		{
+			vel.x = velN.x;
+			vel.y = velN.y;
+		}
+		else
+		{
+			vel = velN;
+		}
+	}
 
 	if (is_approx_zero(forceChar.x))
 	{
@@ -207,6 +214,14 @@ void World_Unit::UpdatePosition(s32 frameCount, const Vector3& pos, const Vector
 		const f32 t = (m_animIndex - (static_cast<f32>(animIndex0) / animRange)) * animRange;
 
 		__InterpolateAnims(animIndex0 + 1, animIndex1 + 1, t);
+
+		// update position, rotation, velocity.
+		m_pos = pos;
+		m_rotation = facing;
+		m_velocity = vel;
+
+		// update distance travelled.
+		m_distanceTravelled += dist;
 	}
 	else if (m_sittingFrame < SITTING_FRAME_MAX)
 	{
@@ -236,7 +251,14 @@ void World_Unit::UpdatePosition(s32 frameCount, const Vector3& pos, const Vector
 		m_thoughtFrame = 0;
 		m_thoughtFrameNext = (THOUGHT_FRAME_HIDE_MIN + (rand() % (THOUGHT_FRAME_HIDE_MAX - THOUGHT_FRAME_HIDE_MIN)));
 	}
-	else if (m_sittingFrame == SITTING_FRAME_MAX)
+
+	// compute updated bounds.
+	ComputeBounds();
+}
+
+void World_Unit::Update(s32 frameCount)
+{
+	if (IsSitting())
 	{
 		m_thoughtFrame += frameCount;
 		const bool change = m_thoughtFrame > m_thoughtFrameNext;
@@ -279,15 +301,11 @@ void World_Unit::UpdatePosition(s32 frameCount, const Vector3& pos, const Vector
 			}
 		}
 	}
-
-	// update position, rotation, velocity.
-	m_pos = pos;
-	m_rotation = facing;
-	m_velocity = vel;
-
-	// compute updated bounds.
-	ComputeBounds();
 }
 
+bool World_Unit::IsSitting() const
+{
+	return m_sittingFrame == SITTING_FRAME_MAX;
+}
 
 }
