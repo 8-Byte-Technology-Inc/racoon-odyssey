@@ -161,9 +161,9 @@ private:
 	RenderModel_DAE_Anim_Transform* __LookupAnimTransform(RenderModel_DAE_ParseContext& parseContext, const char* jointName, s32 animID);
 	void __SetBoneTextureData(RenderModel_DAE_ParseContext& parseContext, f32* pBoneTextureData, const IVector2& boneTextureSize, const RenderModel_Anim& anim);
 
-	static void __ParseDAEStartElement(void *ctx, const u8* name, const u8** atts);
-	static void __ParseDAECharacters(void *ctx, const u8* value, int len);
-	static void __ParseDAEEndElement(void *ctx, const u8* name);
+	static void __ParseDAEStartElement(void *ctx, const char* name, const char** atts);
+	static void __ParseDAECharacters(void *ctx, const char* value, int len);
+	static void __ParseDAEEndElement(void *ctx, const char* name);
 	static XML_Parser_Result __ParseDAERead(TB8::File* f, u8* pBuf, u32* pSize);
 
 	static bool __ParseChars_Numbers(RenderModel_DAE_ParseContext* ctx, char v);

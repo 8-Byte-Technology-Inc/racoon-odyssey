@@ -1020,17 +1020,17 @@ XML_Parser_Result RenderModel::__ParseDAERead(TB8::File* f, u8* pBuf, u32* pSize
 	return (*pSize > 0) ? XML_Parser_Result_Success : XML_Parser_Result_EOF;
 }
 
-void RenderModel::__ParseDAEStartElement(void *_ctx, const u8* name, const u8** _atts)
+void RenderModel::__ParseDAEStartElement(void *_ctx, const char* name, const char** _atts)
 {
 	RenderModel_DAE_ParseContext* ctx = reinterpret_cast<RenderModel_DAE_ParseContext*>(_ctx);
 	ctx->m_tagStack.push_back(std::string(reinterpret_cast<const char*>(name)));
 
 	// id stack.
 	{
-		for (const u8** atts = _atts; atts && *atts; atts += 2)
+		for (const char** atts = _atts; atts && *atts; atts += 2)
 		{
-			const char* attrib = reinterpret_cast<const char*>(*(atts + 0));
-			const char* value = reinterpret_cast<const char*>(*(atts + 1));
+			const char* attrib = *(atts + 0);
+			const char* value = *(atts + 1);
 			if (_strcmpi(attrib, "id") == 0)
 			{
 				ctx->m_idStack.push_back(std::make_pair(std::string(reinterpret_cast<const char*>(name)), std::string(value)));
@@ -1112,10 +1112,10 @@ void RenderModel::__ParseDAEStartElement(void *_ctx, const u8* name, const u8** 
 		&& (_stricmp(ctx->m_tagStack[2].c_str(), "material") == 0)
 		&& (_stricmp(ctx->m_tagStack[3].c_str(), "instance_effect") == 0))
 	{
-		for (const u8** atts = _atts; atts && *atts; atts += 2)
+		for (const char** atts = _atts; atts && *atts; atts += 2)
 		{
-			const char* attrib = reinterpret_cast<const char*>(*(atts + 0));
-			const char* value = reinterpret_cast<const char*>(*(atts + 1));
+			const char* attrib = *(atts + 0);
+			const char* value = *(atts + 1);
 			if (_strcmpi(attrib, "url") == 0)
 			{
 				RenderModel_DAE_Material data;
@@ -1148,10 +1148,10 @@ void RenderModel::__ParseDAEStartElement(void *_ctx, const u8* name, const u8** 
 		&& (_stricmp(ctx->m_tagStack[1].c_str(), "library_geometries") == 0)
 		&& (_stricmp(ctx->m_tagStack[2].c_str(), "geometry") == 0))
 	{
-		for (const u8** atts = _atts; atts && *atts; atts += 2)
+		for (const char** atts = _atts; atts && *atts; atts += 2)
 		{
-			const char* attrib = reinterpret_cast<const char*>(*(atts + 0));
-			const char* value = reinterpret_cast<const char*>(*(atts + 1));
+			const char* attrib = *(atts + 0);
+			const char* value = *(atts + 1);
 			if (_strcmpi(attrib, "name") == 0)
 			{
 				for (std::vector<RenderModel_DAE_Mesh>::iterator itMesh = ctx->m_meshes.begin(); itMesh != ctx->m_meshes.end(); ++itMesh)
@@ -1210,10 +1210,10 @@ void RenderModel::__ParseDAEStartElement(void *_ctx, const u8* name, const u8** 
 	{
 		ctx->m_materialIndex = -1;
 		ctx->m_inputSemantic.clear();
-		for (const u8** atts = _atts; atts && *atts; atts += 2)
+		for (const char** atts = _atts; atts && *atts; atts += 2)
 		{
-			const char* attrib = reinterpret_cast<const char*>(*(atts + 0));
-			const char* value = reinterpret_cast<const char*>(*(atts + 1));
+			const char* attrib = *(atts + 0);
+			const char* value = *(atts + 1);
 			if (_strcmpi(attrib, "material") == 0)
 			{
 				s32 index = 0;
@@ -1240,10 +1240,10 @@ void RenderModel::__ParseDAEStartElement(void *_ctx, const u8* name, const u8** 
 		&& (_stricmp(ctx->m_tagStack[4].c_str(), "triangles") == 0)
 		&& (_stricmp(ctx->m_tagStack[5].c_str(), "input") == 0))
 	{
-		for (const u8** atts = _atts; atts && *atts; atts += 2)
+		for (const char** atts = _atts; atts && *atts; atts += 2)
 		{
-			const char* attrib = reinterpret_cast<const char*>(*(atts + 0));
-			const char* value = reinterpret_cast<const char*>(*(atts + 1));
+			const char* attrib = *(atts + 0);
+			const char* value = *(atts + 1);
 			if (_strcmpi(attrib, "semantic") == 0)
 			{
 				if (_strcmpi(value, "vertex") == 0)
@@ -1333,10 +1333,10 @@ void RenderModel::__ParseDAEStartElement(void *_ctx, const u8* name, const u8** 
 		&& (_stricmp(ctx->m_tagStack[2].c_str(), "controller") == 0)
 		&& (_stricmp(ctx->m_tagStack[3].c_str(), "skin") == 0))
 	{
-		for (const u8** atts = _atts; atts && *atts; atts += 2)
+		for (const char** atts = _atts; atts && *atts; atts += 2)
 		{
-			const char* attrib = reinterpret_cast<const char*>(*(atts + 0));
-			const char* value = reinterpret_cast<const char*>(*(atts + 1));
+			const char* attrib = *(atts + 0);
+			const char* value = *(atts + 1);
 			if (_strcmpi(attrib, "source") == 0)
 			{
 				for (std::vector<RenderModel_DAE_Mesh>::iterator it = ctx->m_meshes.begin(); it != ctx->m_meshes.end(); ++it)
@@ -1450,10 +1450,10 @@ void RenderModel::__ParseDAEStartElement(void *_ctx, const u8* name, const u8** 
 		&& (ctx->m_idStack.size() >= 2)
 		&& (ctx->m_idStack.back().second.find("Armature") != std::string::npos))
 	{
-		for (const u8** atts = _atts; atts && *atts; atts += 2)
+		for (const char** atts = _atts; atts && *atts; atts += 2)
 		{
-			const char* attrib = reinterpret_cast<const char*>(*(atts + 0));
-			const char* value = reinterpret_cast<const char*>(*(atts + 1));
+			const char* attrib = *(atts + 0);
+			const char* value = *(atts + 1);
 			if (_strcmpi(attrib, "sid") == 0)
 			{
 				for (std::vector<RenderModel_DAE_Mesh>::iterator itMesh = ctx->m_meshes.begin(); itMesh != ctx->m_meshes.end(); ++itMesh)
@@ -1560,10 +1560,10 @@ void RenderModel::__ParseDAEStartElement(void *_ctx, const u8* name, const u8** 
 		&& (_stricmp(ctx->m_tagStack[3].c_str(), "node") == 0)
 		&& (_stricmp(ctx->m_tagStack[4].c_str(), "instance_geometry") == 0))
 	{
-		for (const u8** atts = _atts; atts && *atts; atts += 2)
+		for (const char** atts = _atts; atts && *atts; atts += 2)
 		{
-			const char* attrib = reinterpret_cast<const char*>(*(atts + 0));
-			const char* value = reinterpret_cast<const char*>(*(atts + 1));
+			const char* attrib = *(atts + 0);
+			const char* value = *(atts + 1);
 			if (_strcmpi(attrib, "url") == 0)
 			{
 				for (std::vector<RenderModel_DAE_Mesh>::iterator it = ctx->m_meshes.begin(); it != ctx->m_meshes.end(); ++it)
@@ -1587,10 +1587,10 @@ void RenderModel::__ParseDAEStartElement(void *_ctx, const u8* name, const u8** 
 		&& (_stricmp(ctx->m_tagStack[3].c_str(), "node") == 0)
 		&& (_stricmp(ctx->m_tagStack[4].c_str(), "instance_controller") == 0))
 	{
-		for (const u8** atts = _atts; atts && *atts; atts += 2)
+		for (const char** atts = _atts; atts && *atts; atts += 2)
 		{
-			const char* attrib = reinterpret_cast<const char*>(*(atts + 0));
-			const char* value = reinterpret_cast<const char*>(*(atts + 1));
+			const char* attrib = *(atts + 0);
+			const char* value = *(atts + 1);
 			if (_strcmpi(attrib, "url") == 0)
 			{
 				for (std::vector<RenderModel_DAE_Mesh>::iterator it = ctx->m_meshes.begin(); it != ctx->m_meshes.end(); ++it)
@@ -1607,7 +1607,7 @@ void RenderModel::__ParseDAEStartElement(void *_ctx, const u8* name, const u8** 
 	}
 }
 
-void RenderModel::__ParseDAECharacters(void *_ctx, const u8* value, int len)
+void RenderModel::__ParseDAECharacters(void *_ctx, const char* value, int len)
 {
 	RenderModel_DAE_ParseContext* ctx = reinterpret_cast<RenderModel_DAE_ParseContext*>(_ctx);
 
@@ -2161,10 +2161,10 @@ void RenderModel::__ParseDataSet_UpAxis(RenderModel_DAE_ParseContext* ctx)
 	ctx->m_buffer.clear();
 }
 
-void RenderModel::__ParseDAEEndElement(void *_ctx, const u8* name)
+void RenderModel::__ParseDAEEndElement(void *_ctx, const char* name)
 {
 	RenderModel_DAE_ParseContext* ctx = reinterpret_cast<RenderModel_DAE_ParseContext*>(_ctx);
-	assert(_stricmp(ctx->m_tagStack.back().c_str(), reinterpret_cast<const char*>(name)) == 0);
+	assert(_stricmp(ctx->m_tagStack.back().c_str(), name) == 0);
 	HRESULT hr = S_OK;
 
 	// finish up parsing CDATA.

@@ -33,8 +33,15 @@ struct XML_String
 	u8*	m_pStart;
 	u8*	m_pEnd;
 
-	u32 Size() const { return static_cast<u32>(m_pEnd - m_pStart); }
+	XML_String() : m_pStart(nullptr), m_pEnd(nullptr) {}
+	XML_String(u8* pStart, u8* pEnd) : m_pStart(pStart), m_pEnd(pEnd) {}
+	u32 size() const { return static_cast<u32>(m_pEnd - m_pStart); }
+	bool empty() const { return (m_pEnd <= m_pStart); }
 	void Terminate() { *m_pEnd = 0; }
+	u8* front() { return m_pStart; }
+	const u8* front() const { return m_pStart; }
+	u8* back() { return m_pEnd - 1; }
+	void increment_front(u32 cb) { m_pStart += cb; assert(m_pStart <= m_pEnd); }
 };
 
 struct XML_Attrib
@@ -44,9 +51,9 @@ struct XML_Attrib
 };
 
 using pfn_Read = std::function<XML_Parser_Result(u8* buffer, u32* pSize)>;
-using pfn_Start = std::function<void(const u8* name, const u8** attrs)>;
-using pfn_Data = std::function<void(const u8* data, u32 len)>;
-using pfn_End = std::function<void(const u8* name)>;
+using pfn_Start = std::function<void(const char* name, const char** attrs)>;
+using pfn_Data = std::function<void(const char* data, u32 len)>;
+using pfn_End = std::function<void(const char* name)>;
 
 class XML_Parser
 {
@@ -65,20 +72,23 @@ protected:
 	XML_Parser_Result __ReadData();
 	bool __ParseElement(XML_String& data);
 	bool __ParseCData(XML_String& data);
-	bool __ParseName(u8*& pSrc, XML_String& name);
-	bool __ParseAttrValue(u8*& pSrc, XML_String& value);
+	bool __ParseName(XML_String& src, XML_String& name);
+	bool __ParseAttrValue(XML_String& src, XML_String& value);
 	bool __DecodeString(XML_String& str);
-	bool __DecodeEsc(u8*& pSrc, u32 size, u8*& pDst);
-	bool __IsWhitespace(u32 val) { return val == 0x20 || val == 0x9 || val == 0xd || val == 0xa; }
+	bool __DecodeEsc(XML_String& src, u8*& pDst);
+	bool __IsWhitespaceChar(u32 val) { return val == 0x20 || val == 0x9 || val == 0xd || val == 0xa; }
 	bool __IsDigit(u8 val) { return (val >= '0' && val <= '9'); }
 	bool __IsHexDigit(u8 val) { return __IsDigit(val) || (val >= 'A' && val <= 'F') || (val >= 'a' && val <= 'f'); }
 	bool __IsNameStartChar(u32 ch) const;
 	bool __IsNameChar(u32 ch) const;
-	u32 __GetChar(const u8* pSrc) const;
-	u32 __Next(u8*& pSrc) const;
+	bool __GetCharSize(const XML_String& src, u32* pSize) const;
+	bool __GetChar(XML_String& src, u32* pSize, u32* pch) const;
+	bool __Next(XML_String& data) const;
 	void __CompactBuffer();
+	void __SkipWhitespace(XML_String& src);
 	u32 __GetBufferSize() const { return m_bufferSize; }
 	void __EnsureBuffer(u32 size);
+	void __Accumulate(XML_String& data) { assert(m_posCursor < m_posEnd); data.m_pEnd++; m_posCursor++; }
 	void __Consume(XML_String& data, u32 cb);
 	void __ParseError(const char* pszErrorReason);
 

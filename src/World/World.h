@@ -43,9 +43,9 @@ protected:
 	void __AdjustCharacterModelPositionForCollisionsAxis(Vector3& pos, Vector3& vel, const Vector3& axis);
 	bool __IsCharacterModelCollideWithWall(const Vector3& posNew) const;
 
-	void __ParseMapStartElement(const u8* name, const u8** atts);
-	void __ParseMapCharacters(const u8* value, int len);
-	void __ParseMapEndElement(const u8* name);
+	void __ParseMapStartElement(const char* name, const char** atts);
+	void __ParseMapCharacters(const char* value, int len);
+	void __ParseMapEndElement(const char* name);
 	static XML_Parser_Result __ParseMapRead(TB8::File* f, u8* pBuf, u32* pSize);
 
 	std::string									m_mapPath;

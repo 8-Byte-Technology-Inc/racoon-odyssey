@@ -305,7 +305,7 @@ bool World::__IsCharacterModelCollideWithWall(const Vector3& posNew) const
 	return false;
 }
 
-void World::__ParseMapStartElement(const u8* pszName, const u8** ppAttribs)
+void World::__ParseMapStartElement(const char* pszName, const char** ppAttribs)
 {
 	if (_strcmpi(reinterpret_cast<const char*>(pszName), "model") == 0)
 	{
@@ -316,10 +316,10 @@ void World::__ParseMapStartElement(const u8* pszName, const u8** ppAttribs)
 		const char* pszModel = nullptr;
 		RenderModel* pModel = nullptr;
 
-		for (const u8** ppAttrib = ppAttribs; ppAttrib && *ppAttrib; ppAttrib += 2)
+		for (const char** ppAttrib = ppAttribs; ppAttrib && *ppAttrib; ppAttrib += 2)
 		{
-			const char* pszAttribName = reinterpret_cast<const char*>(*(ppAttrib + 0));
-			const char* pszValue = reinterpret_cast<const char*>(*(ppAttrib + 1));
+			const char* pszAttribName = *(ppAttrib + 0);
+			const char* pszValue = *(ppAttrib + 1);
 
 			if (_strcmpi(pszAttribName, "id") == 0)
 			{
@@ -365,10 +365,10 @@ void World::__ParseMapStartElement(const u8* pszName, const u8** ppAttribs)
 	{
 		u32 defaultTile = 0;
 
-		for (const u8** ppAttrib = ppAttribs; ppAttrib && *ppAttrib; ppAttrib += 2)
+		for (const char** ppAttrib = ppAttribs; ppAttrib && *ppAttrib; ppAttrib += 2)
 		{
-			const char* pszAttribName = reinterpret_cast<const char*>(*(ppAttrib + 0));
-			const char* pszValue = reinterpret_cast<const char*>(*(ppAttrib + 1));
+			const char* pszAttribName = *(ppAttrib + 0);
+			const char* pszValue = *(ppAttrib + 1);
 
 			if (_strcmpi(pszAttribName, "x") == 0)
 			{
@@ -409,10 +409,10 @@ void World::__ParseMapStartElement(const u8* pszName, const u8** ppAttribs)
 	if (_strcmpi(reinterpret_cast<const char*>(pszName), "start") == 0)
 	{
 		Vector3 posStart(0.f, 0.f, 0.f);
-		for (const u8** ppAttrib = ppAttribs; ppAttrib && *ppAttrib; ppAttrib += 2)
+		for (const char** ppAttrib = ppAttribs; ppAttrib && *ppAttrib; ppAttrib += 2)
 		{
-			const char* pszAttribName = reinterpret_cast<const char*>(*(ppAttrib + 0));
-			const char* pszValue = reinterpret_cast<const char*>(*(ppAttrib + 1));
+			const char* pszAttribName = *(ppAttrib + 0);
+			const char* pszValue = *(ppAttrib + 1);
 
 			if (_strcmpi(pszAttribName, "x") == 0)
 			{
@@ -429,10 +429,10 @@ void World::__ParseMapStartElement(const u8* pszName, const u8** ppAttribs)
 	if (_strcmpi(reinterpret_cast<const char*>(pszName), "cell") == 0)
 	{
 		IVector2 pos;
-		for (const u8** ppAttrib = ppAttribs; ppAttrib && *ppAttrib; ppAttrib += 2)
+		for (const char** ppAttrib = ppAttribs; ppAttrib && *ppAttrib; ppAttrib += 2)
 		{
-			const char* pszAttribName = reinterpret_cast<const char*>(*(ppAttrib + 0));
-			const char* pszValue = reinterpret_cast<const char*>(*(ppAttrib + 1));
+			const char* pszAttribName = *(ppAttrib + 0);
+			const char* pszValue = *(ppAttrib + 1);
 
 			if (_strcmpi(pszAttribName, "pos") == 0)
 			{
@@ -510,11 +510,11 @@ void World::__ParseMapStartElement(const u8* pszName, const u8** ppAttribs)
 	}
 }
 
-void World::__ParseMapCharacters(const u8* value, int len)
+void World::__ParseMapCharacters(const char* value, int len)
 {
 }
 
-void World::__ParseMapEndElement(const u8* name)
+void World::__ParseMapEndElement(const char* name)
 {
 }
 

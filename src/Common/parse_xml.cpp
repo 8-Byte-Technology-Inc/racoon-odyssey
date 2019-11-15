@@ -57,120 +57,115 @@ XML_Parser_Result XML_Parser::Parse()
 			&& (result != XML_Parser_Result_Pending))
 			return result;
 
-		XML_String data;
-		data.m_pStart = &(m_data[m_posStart]);
-		data.m_pEnd = data.m_pStart + (m_posCursor - m_posStart);
-
+		XML_String data(&(m_data[m_posStart]), &(m_data[m_posCursor]));
 		while (m_posCursor < m_posEnd)
 		{
+			const u32 cbData = data.size();
 			switch (m_context)
 			{
 			case XML_Parser_Context_CData:
 			{
-				if (*(data.m_pEnd) == '<')
+				if ((cbData > 0)
+					&& (*(data.back()) == '<'))
 				{
 					if (!__ParseCData(data))
 						return XML_Parser_Result_Error;
-					assert(*(data.m_pStart) == '<');
+					assert(*(data.front()) == '<');
 					m_context = XML_Parser_Context_Tag;
 				}
 				else
 				{
-					m_posCursor += __Next(data.m_pEnd);
+					__Accumulate(data);
 				}
 				break;
 			}
 			case XML_Parser_Context_Tag:
 			{
-				const u32 cb = m_posCursor - m_posStart;
-				assert(*(data.m_pStart + 0) == '<');
-				if ((cb >= 3)
-					&& (*(data.m_pStart + 1) == '!')
-					&& (*(data.m_pStart + 2) != '-'))
+				assert(*(data.front() + 0) == '<');
+				if ((cbData >= 3)
+					&& (*(data.front() + 1) == '!')
+					&& (*(data.front() + 2) != '-'))
 				{
 					m_context = XML_Parser_Context_Decl;
 				}
-				else if ((cb >= 4)
-					&& (*(data.m_pStart + 1) == '!')
-					&& (*(data.m_pStart + 2) == '-')
-					&& (*(data.m_pStart + 3) == '-'))
+				else if ((cbData >= 4)
+					&& (*(data.front() + 1) == '!')
+					&& (*(data.front() + 2) == '-')
+					&& (*(data.front() + 3) == '-'))
 				{
 					m_context = XML_Parser_Context_Comment;
 				}
-				else if ((cb >= 5)
-					&& (*(data.m_pStart + 1) == '?')
-					&& (*(data.m_pStart + 2) == 'x')
-					&& (*(data.m_pStart + 3) == 'm')
-					&& (*(data.m_pStart + 4) == 'l'))
+				else if ((cbData >= 5)
+					&& (*(data.front() + 1) == '?')
+					&& (*(data.front() + 2) == 'x')
+					&& (*(data.front() + 3) == 'm')
+					&& (*(data.front() + 4) == 'l'))
 				{
 					m_context = XML_Parser_Context_XMLDecl;
 				}
-				else if ((cb >= 2)
-					&& (*(data.m_pStart + 1) != '!')
-					&& (*(data.m_pStart + 1) != '?'))
+				else if ((cbData >= 2)
+					&& (*(data.front() + 1) != '!')
+					&& (*(data.front() + 1) != '?'))
 				{
 					m_context = XML_Parser_Context_Element;
 				}
-				else if ((cb >= 3)
-					&& (*(data.m_pEnd - 0) == '>'))
+				else if ((cbData >= 3)
+					&& (*(data.back()) == '>'))
 				{
-					__Consume(data, cb + 1);
+					__Consume(data, cbData);
 					m_context = XML_Parser_Context_CData;
 				}
 				else
 				{
-					m_posCursor += __Next(data.m_pEnd);
+					__Accumulate(data);
 				}
 				break;
 			}
 			case XML_Parser_Context_XMLDecl:
 			{
-				if ((*(data.m_pEnd - 1) == '?')
-					&& (*(data.m_pEnd - 0) == '>'))
+				if ((*(data.back() - 1) == '?')
+					&& (*(data.back() - 0) == '>'))
 				{
-					const u32 cb = m_posCursor - m_posStart;
-					__Consume(data, cb + 1);
+					__Consume(data, cbData);
 					m_context = XML_Parser_Context_CData;
 				}
 				else
 				{
-					m_posCursor += __Next(data.m_pEnd);
+					__Accumulate(data);
 				}
 				break;
 			}
 			case XML_Parser_Context_Comment:
 			{
-				if ( (*(data.m_pEnd - 2) == '-')
-					&& (*(data.m_pEnd - 1) == '-')
-					&& (*(data.m_pEnd - 0) == '>'))
+				if ( (*(data.back() - 2) == '-')
+					&& (*(data.back() - 1) == '-')
+					&& (*(data.back() - 0) == '>'))
 				{
-					const u32 cb = m_posCursor - m_posStart;
-					__Consume(data, cb + 1);
+					__Consume(data, cbData);
 					m_context = XML_Parser_Context_CData;
 				}
 				else
 				{
-					m_posCursor += __Next(data.m_pEnd);
+					__Accumulate(data);
 				}
 				break;
 			}
 			case XML_Parser_Context_Decl:
 			{
-				if (*(data.m_pEnd - 0) == '>')
+				if (*(data.back() - 0) == '>')
 				{
-					const u32 cb = m_posCursor - m_posStart;
-					__Consume(data, cb + 1);
+					__Consume(data, cbData);
 					m_context = XML_Parser_Context_CData;
 				}
 				else
 				{
-					m_posCursor += __Next(data.m_pEnd);
+					__Accumulate(data);
 				}
 				break;
 			}
 			case XML_Parser_Context_Element:
 			{
-				if (*(data.m_pEnd - 0) == '>')
+				if (*(data.back() - 0) == '>')
 				{
 					if (!__ParseElement(data))
 						return XML_Parser_Result_Error;
@@ -178,7 +173,7 @@ XML_Parser_Result XML_Parser::Parse()
 				}
 				else
 				{
-					m_posCursor += __Next(data.m_pEnd);
+					__Accumulate(data);
 				}
 				break;
 			}
@@ -195,10 +190,7 @@ XML_Parser_Result XML_Parser::Parse()
 	{
 		if (m_context == XML_Parser_Context_CData)
 		{
-			XML_String data;
-			data.m_pStart = &(m_data[m_posStart]);
-			data.m_pEnd = data.m_pStart + (m_posCursor - m_posStart);
-
+			XML_String data(&(m_data[m_posStart]), &(m_data[m_posCursor]));
 			if (!__ParseCData(data))
 				return XML_Parser_Result_Error;
 		}
@@ -214,8 +206,8 @@ void XML_Parser::__Consume(XML_String& data, u32 cb)
 {
 	m_posStart += cb;
 	m_posCursor = m_posStart;
-	data.m_pStart = &(m_data[m_posStart]);
-	data.m_pEnd = data.m_pStart + (m_posCursor - m_posStart);
+	data.m_pStart = &(m_data[m_posCursor]);
+	data.m_pEnd = data.m_pStart;
 }
 
 void XML_Parser::__CompactBuffer()
@@ -274,39 +266,35 @@ XML_Parser_Result XML_Parser::__ReadData()
 
 bool XML_Parser::__ParseElement(XML_String& data)
 {
-	assert(*(data.m_pStart) == '<');
-	assert(*(data.m_pEnd) == '>');
-	const u32 cb = data.Size();
-	u8* pSrc = data.m_pStart;
+	assert(*(data.front()) == '<');
+	assert(*(data.back()) == '>');
+	XML_String src = data;
 
 	bool isClose = false;
 	bool isOpenClose = false;
 
-	++pSrc;
+	src.increment_front(1);
 
-	while (__IsWhitespace(*pSrc))
-		++pSrc;
+	__SkipWhitespace(src);
 
 	// close tag.
-	if (*pSrc == '/')
+	if (*src.front() == '/')
 	{
 		isClose = true;
-		++pSrc;
+		src.increment_front(1);
 	}
 
-	while (__IsWhitespace(*pSrc))
-		++pSrc;
+	__SkipWhitespace(src);
 
 	// tag name.
 	XML_String tagName;
-	if (!__ParseName(pSrc, tagName))
+	if (!__ParseName(src, tagName))
 	{
 		__ParseError("Parsing element, expected element name");
 		return false;
 	}
 
-	while (__IsWhitespace(*pSrc))
-		++pSrc;
+	__SkipWhitespace(src);
 
 	// attributes.
 	std::vector<XML_Attrib> attribs;
@@ -315,43 +303,38 @@ bool XML_Parser::__ParseElement(XML_String& data)
 		XML_Attrib attrib;
 
 		// attrib name.
-		if (!__ParseName(pSrc, attrib.m_name))
+		if (!__ParseName(src, attrib.m_name))
 			break;
 
-		while (__IsWhitespace(*pSrc))
-			++pSrc;
+		__SkipWhitespace(src);
 
 		// eq.
-		if (*pSrc != '=')
+		if (*src.front() != '=')
 			break;
-		++pSrc;
+		src.increment_front(1);
 
-		while (__IsWhitespace(*pSrc))
-			++pSrc;
+		__SkipWhitespace(src);
 
 		// attrib value.
-		if (!__ParseAttrValue(pSrc, attrib.m_value))
+		if (!__ParseAttrValue(src, attrib.m_value))
 			break;
 
-		while (__IsWhitespace(*pSrc))
-			++pSrc;
+		__SkipWhitespace(src);
 
 		attribs.push_back(attrib);
 	}
 
-	while (__IsWhitespace(*pSrc))
-		++pSrc;
+	__SkipWhitespace(src);
 
-	if (*pSrc == '/')
+	if (*src.front() == '/')
 	{
 		isOpenClose = true;
-		++pSrc;
+		src.increment_front(1);
 	}
 
-	while (__IsWhitespace(*pSrc))
-		++pSrc;
+	__SkipWhitespace(src);
 
-	if (*pSrc != '>')
+	if (*src.front() != '>')
 	{
 		__ParseError("Parsing element, expected closing tag >");
 		return false;
@@ -361,7 +344,7 @@ bool XML_Parser::__ParseElement(XML_String& data)
 
 	if (!isClose)
 	{
-		std::vector<const u8*> attrib_ptr;
+		std::vector<const char*> attrib_ptr;
 		attrib_ptr.reserve((attribs.size() + 1) * 2);
 
 		// make a list of attrib pointers, add null terminators.
@@ -371,48 +354,55 @@ bool XML_Parser::__ParseElement(XML_String& data)
 			attrib.m_name.Terminate();
 			__DecodeString(attrib.m_value);
 			attrib.m_value.Terminate();
-			attrib_ptr.push_back(attrib.m_name.m_pStart);
-			attrib_ptr.push_back(attrib.m_value.m_pStart);
+			attrib_ptr.push_back(reinterpret_cast<const char*>(attrib.m_name.front()));
+			attrib_ptr.push_back(reinterpret_cast<const char*>(attrib.m_value.front()));
 		}
 
 		attrib_ptr.push_back(nullptr);
 		attrib_ptr.push_back(nullptr);
 
-		m_pfn_Start(tagName.m_pStart, attrib_ptr.data());
+		m_pfn_Start(reinterpret_cast<const char*>(tagName.front()), attrib_ptr.data());
 	}
 
 	if (isClose || isOpenClose)
 	{
-		m_pfn_End(tagName.m_pStart);
+		m_pfn_End(reinterpret_cast<const char*>(tagName.front()));
 	}
 
-	__Consume(data, cb + 1);
+	__Consume(data, data.size());
 	return true;
 }
 
 bool XML_Parser::__ParseCData(XML_String& data)
 {
-	const u32 cb = data.Size();
-	u8* pSrc = data.m_pStart;
+	XML_String src = data;
 
-	// check if the entire data is whitespace.
-	while ((pSrc != data.m_pEnd) && __IsWhitespace(*pSrc))
-		++pSrc;
-	if (pSrc == data.m_pEnd)
+	// if there is a tailing <, remove it.
+	if (!src.empty() && (*src.back() == '<'))
+		src.m_pEnd--;
+
+	// is the entire data whitespace?
+	XML_String srcTemp = src;
+	__SkipWhitespace(srcTemp);
+	if (srcTemp.empty())
 	{
-		__Consume(data, cb);
+		__Consume(data, src.size());
 		return true;
 	}
 
-	__DecodeString(data);
+	const u32 cbSrc = src.size();
 
-	assert((m_posStart + cb) < static_cast<u32>(m_data.size()));
-	const u8 temp = *data.m_pEnd;
-	*data.m_pEnd = 0;
-	m_pfn_Data(data.m_pStart, data.Size());
-	*data.m_pEnd = temp;
+	// decode the data.
+	__DecodeString(src);
 
-	__Consume(data, cb);
+	// there should be a little extra in the buffer so we can temporarily add a null terminator.
+	assert(static_cast<u32>((src.m_pEnd + 1) - m_data.data()) < static_cast<u32>(m_data.size()));
+	const u8 temp = *src.m_pEnd;
+	*src.m_pEnd = 0;
+	m_pfn_Data(reinterpret_cast<const char*>(src.front()), src.size());
+	*src.m_pEnd = temp;
+
+	__Consume(data, cbSrc);
 	return true;
 }
 
@@ -447,44 +437,48 @@ bool XML_Parser::__IsNameChar(u32 val) const
 		|| ((val >= 0x203F) && (val <= 0x2040));
 }
 
-bool XML_Parser::__ParseName(u8*& pSrc, XML_String& name)
+bool XML_Parser::__ParseName(XML_String& src, XML_String& name)
 {
-	while (__IsWhitespace(*pSrc))
-		++pSrc;
+	__SkipWhitespace(src);
 
-	if (!__IsNameStartChar(__GetChar(pSrc)))
+	u32 cbSize;
+	u32 ch;
+	if (!__GetChar(src, &cbSize, &ch)
+		|| !__IsNameStartChar(ch))
 		return false;
-	name.m_pStart = pSrc;
-	__Next(pSrc);
 
-	while (__IsNameChar(__GetChar(pSrc)))
-		__Next(pSrc);
+	name.m_pStart = src.m_pStart;
+	src.increment_front(cbSize);
+
+	while (__GetChar(src, &cbSize, &ch)
+		&& __IsNameChar(ch))
+	{
+		src.increment_front(cbSize);
+	}
 		
-	name.m_pEnd = pSrc;
+	name.m_pEnd = src.m_pStart;
 	return true;
 }
 
-bool XML_Parser::__ParseAttrValue(u8*& pSrc, XML_String& value)
+bool XML_Parser::__ParseAttrValue(XML_String& src, XML_String& value)
 {
-	while (__IsWhitespace(*pSrc))
-		++pSrc;
+	__SkipWhitespace(src);
 
-	if (*pSrc != '"')
+	if (*src.front() != '"')
 		return false;
-	__Next(pSrc);
-	value.m_pStart = pSrc;
+	src.increment_front(1);
+	value.m_pStart = src.m_pStart;
 
-	while (*pSrc != '"' && *pSrc != '>')
-		__Next(pSrc);
+	while ((*src.front() != '"') && (*src.front() != '>'))
+		__Next(src);
 
-	if (*pSrc != '"')
+	if (*src.front() != '"')
 		return false;
 
-	value.m_pEnd = pSrc;
-	++pSrc;
+	value.m_pEnd = src.m_pStart;
+	src.increment_front(1);
 
-	while (__IsWhitespace(*pSrc))
-		++pSrc;
+	__SkipWhitespace(src);
 	return true;
 }
 
@@ -493,99 +487,107 @@ void XML_Parser::__ParseError(const char* pszErrorReason)
 	m_errorReason = pszErrorReason;
 }
 
-u32 XML_Parser::__Next(u8*& pSrc) const
+void XML_Parser::__SkipWhitespace(XML_String& src)
 {
-	if ((*pSrc & 0x80) == 0)
+	// [3]   	S	   :: = (#x20 | #x9 | #xD | #xA) +
+	while (!src.empty()
+		&& __IsWhitespaceChar(*src.front()))
 	{
-		++pSrc;
-		return 1;
-	}
-	else if ((*pSrc & 0xe0) == 0xc0)
-	{
-		++pSrc;
-		assert((*pSrc & 0xc0) == 0x80);
-		++pSrc;
-		return 2;
-	}
-	else if ((*pSrc & 0xf0) == 0xe0)
-	{
-		++pSrc;
-		assert((*pSrc & 0xc0) == 0x80);
-		++pSrc;
-		assert((*pSrc & 0xc0) == 0x80);
-		++pSrc;
-		return 3;
-	}
-	else if ((*pSrc & 0xf8) == 0xf0)
-	{
-		++pSrc;
-		assert((*pSrc & 0xc0) == 0x80);
-		++pSrc;
-		assert((*pSrc & 0xc0) == 0x80);
-		++pSrc;
-		assert((*pSrc & 0xc0) == 0x80);
-		++pSrc;
-		return 4;
-	}
-	else
-	{
-		++pSrc;
-		return 1;
+		src.increment_front(1);
 	}
 }
 
-u32 XML_Parser::__GetChar(const u8* pSrc) const
+bool XML_Parser::__GetCharSize(const XML_String& src, u32* pSize) const
 {
-	if (((*(pSrc + 0) & 0x80) == 0))
+	// how many encoded bytes do we expect?
+	if (src.empty())
+		*pSize = 0;
+	else if ((*src.front() & 0x80) == 0)
+		*pSize = 1;
+	else if ((*src.front() & 0xe0) == 0xc0)
+		*pSize = 2;
+	else if ((*src.front() & 0xf0) == 0xe0)
+		*pSize = 3;
+	else if ((*src.front() & 0xf8) == 0xf0)
+		*pSize = 4;
+
+	// if any trailing bytes are invalid, treat it as regular bytes.
+	const u32 cbCheckTrail = std::min<u32>(*pSize, src.size());
+	for (u32 i = 1; i < cbCheckTrail; ++i)
 	{
-		return *pSrc;
+		if ((*(src.front() + i) & 0xc0) == 0x80)
+			continue;
+		*pSize = 1;
+		break;
 	}
-	else if (((*(pSrc + 0) & 0xe0) == 0xc0))
+
+	return (*pSize > 0) && (*pSize <= src.size());
+}
+
+bool XML_Parser::__Next(XML_String& src) const
+{
+	u32 cbEncoded;
+	if (!__GetCharSize(src, &cbEncoded))
+		return false;
+
+	src.increment_front(cbEncoded);
+	return true;
+}
+
+bool XML_Parser::__GetChar(XML_String& src, u32* pSize, u32* pch) const
+{
+	if (!__GetCharSize(src, pSize))
+		return false;
+
+	if (*pSize == 1)
 	{
-		return (static_cast<u32>(*(pSrc + 0) & 0x1f) << 6)
-			| (static_cast<u32>(*(pSrc + 1) & 0x3f) << 0);
+		*pch = *src.front();
 	}
-	else if (((*(pSrc + 0) & 0xf0) == 0xe0))
+	else if (*pSize == 2)
 	{
-		return (static_cast<u32>(*(pSrc + 0) & 0x0f) << 12)
-			| (static_cast<u32>(*(pSrc + 1) & 0x3f) << 6)
-			| (static_cast<u32>(*(pSrc + 2) & 0x3f) << 0);
+		*pch = (static_cast<u32>(*(src.front() + 0) & 0x1f) << 6)
+			| (static_cast<u32>(*(src.front() + 1) & 0x3f) << 0);
 	}
-	else if (((*(pSrc + 0) & 0xf8) == 0xf0))
+	else if (*pSize == 3)
 	{
-		return (static_cast<u32>(*(pSrc + 0) & 0x07) << 18)
-			| (static_cast<u32>(*(pSrc + 1) & 0x3f) << 12)
-			| (static_cast<u32>(*(pSrc + 2) & 0x3f) << 6)
-			| (static_cast<u32>(*(pSrc + 3) & 0x3f) << 0);
+		*pch = (static_cast<u32>(*(src.front() + 0) & 0x0f) << 12)
+			| (static_cast<u32>(*(src.front() + 1) & 0x3f) << 6)
+			| (static_cast<u32>(*(src.front() + 2) & 0x3f) << 0);
 	}
-	else
+	else if (*pSize == 4)
 	{
-		return *pSrc;
+		*pch = (static_cast<u32>(*(src.front() + 0) & 0x07) << 18)
+			| (static_cast<u32>(*(src.front() + 1) & 0x3f) << 12)
+			| (static_cast<u32>(*(src.front() + 2) & 0x3f) << 6)
+			| (static_cast<u32>(*(src.front() + 3) & 0x3f) << 0);
 	}
+	return true;
 }
 
 bool XML_Parser::__DecodeString(XML_String& s)
 {
+	XML_String src = s;
 	u8* pDst = s.m_pStart;
-	for (u8* pSrc = s.m_pStart; pSrc != s.m_pEnd; )
+	while (!src.empty())
 	{
-		if (*pSrc == '&')
+		if (*src.front() == '&')
 		{
 			// escape sequence !
-			if (!__DecodeEsc(pSrc, static_cast<u32>(s.m_pEnd - pSrc), pDst))
+			if (!__DecodeEsc(src, pDst))
 				return false;
 		}
 		else
 		{
 			// copy character.
-			u8* pSrcNext = pSrc;
-			const u32 cb = __Next(pSrcNext);
-			if (pDst != pSrc)
+			u32 cb;
+			if (!__GetCharSize(src, &cb))
+				return false;
+			if (pDst != src.m_pStart)
 			{
-				memmove(pDst, pSrc, cb);
+				memmove(pDst, src.m_pStart, cb);
 			}
+			src.increment_front(cb);
 			pDst += cb;
-			pSrc += cb;
 		}
 	}
 
@@ -593,94 +595,82 @@ bool XML_Parser::__DecodeString(XML_String& s)
 	return true;
 }
 
-bool XML_Parser::__DecodeEsc(u8*& pSrc, u32 size, u8*& pDst)
+struct XML_Parser_EscSeq
 {
-	++pSrc;
-	--size;
-	if (size >= 4 && *(pSrc + 0) == 'a' && *(pSrc + 1) == 'm' && *(pSrc + 2) == 'p' && *(pSrc + 3) == ';')
+	const char*		m_pszSeq;		// sequence
+	u32				m_size;			// size of sequence
+	u8				m_val;			// replacement value
+};
+
+static const XML_Parser_EscSeq s_escSeq[] =
+{
+	{ "&amp;", 5, '&' },
+	{ "&lt;", 4, '<' },
+	{ "&gt;", 4, '>' },
+	{ "&quot;", 6, '\"' },
+	{ "&apos;", 6, '\'' },
+};
+
+bool XML_Parser::__DecodeEsc(XML_String& src, u8*& pDst)
+{
+	assert(*src.front() == '&');
+	const u32 size = src.size();
+
+	// look thru fixed definitions.
+	for (u32 i = 0; i < ARRAYSIZE(s_escSeq); ++i)
 	{
-		*pDst = '&';
-		pSrc += 4;
-		pDst++;
+		const XML_Parser_EscSeq& seq = s_escSeq[i];
+		if (size < seq.m_size)
+			continue;
+		if (memcmp(src.front(), seq.m_pszSeq, seq.m_size) != 0)
+			continue;
+		*(pDst++) = seq.m_val;
+		src.increment_front(seq.m_size);
 		return true;
 	}
-	else if (size >= 3 && *(pSrc + 0) == 'l' && *(pSrc + 1) == 't' && *(pSrc + 2) == ';')
+
+	if ((size >= 5) && *(src.front() + 1) == '#' && *(src.front() + 2) == 'x')
 	{
-		*pDst = '<';
-		pSrc += 3;
-		pDst++;
-		return true;
-	}
-	else if (size >= 3 && *(pSrc + 0) == 'g' && *(pSrc + 1) == 't' && *(pSrc + 2) == ';')
-	{
-		*pDst = '>';
-		pSrc += 3;
-		pDst++;
-		return true;
-	}
-	else if (size >= 5 && *(pSrc + 0) == 'q' && *(pSrc + 1) == 'u' && *(pSrc + 2) == 'o' && *(pSrc + 3) == 't' && *(pSrc + 4) == ';')
-	{
-		*pDst = '"';
-		pSrc += 5;
-		pDst++;
-		return true;
-	}
-	else if (size >= 5 && *(pSrc + 0) == 'a' && *(pSrc + 1) == 'p' && *(pSrc + 2) == 'o' && *(pSrc + 3) == 's' && *(pSrc + 4) == ';')
-	{
-		*pDst = '\'';
-		pSrc += 5;
-		pDst++;
-		return true;
-	}
-	else if (size >= 4 && *(pSrc + 0) == '#' && *(pSrc + 1) == 'x')
-	{
-		pSrc += 2;
-		size -= 2;
+		src.increment_front(3);
 		u32 val = 0;
-		while ((size > 0) && __IsHexDigit(*pSrc))
+		while (!src.empty() && __IsHexDigit(*src.front()))
 		{
+			const u8 ch = *src.front();
 			val = val * 16;
-			if (__IsDigit(*pSrc))
-				val += (*pSrc - '0');
-			else if (*pSrc >= 'A' && *pSrc <= 'F')
-				val += (*pSrc - 'A') + 10;
-			else if (*pSrc >= 'a' && *pSrc <= 'f')
-				val += (*pSrc - 'a') + 10;
-			++pSrc;
-			--size;
+			if (__IsDigit(ch))
+				val += (ch - '0');
+			else if (ch >= 'A' && ch <= 'F')
+				val += (ch - 'A') + 10;
+			else if (ch >= 'a' && ch <= 'f')
+				val += (ch - 'a') + 10;
+			src.increment_front(1);
 		}
-		if ((size == 0) || *pSrc != ';')
-			return false;
-		++pSrc;
-		*pDst = static_cast<u8>(val);
-		return true;
+		*(pDst++) = static_cast<u8>(val);
 	}
-	else if (size >= 3 && *(pSrc + 0) == '#')
+	else if ((size >= 4) && *(src.front() + 1) == '#')
 	{
-		++pSrc;
+		src.increment_front(2);
 		u32 val = 0;
-		while ((size > 0) && __IsDigit(*pSrc))
+		while (!src.empty() && __IsDigit(*src.front()))
 		{
+			const u8 ch = *src.front();
 			val = val * 10;
-			val += (*pSrc - '0');
-			++pSrc;
+			val += (ch - '0');
+			src.increment_front(1);
 		}
-		if ((size == 0) || *pSrc != ';')
-			return false;
-		++pSrc;
-		*pDst = static_cast<u8>(val);
-		return true;
+		*(pDst++) = static_cast<u8>(val);
 	}
 	else
 	{
-		while ((size > 0) && *pSrc != ';')
-		{
-			++pSrc;
-			--size;
-		}
-		return true;
+		src.increment_front(1);
+		while (!src.empty() && *src.front() != ';')
+			src.increment_front(1);
 	}
-	return false;
+
+	if (src.empty() || *src.front() != ';')
+		return false;
+	src.increment_front(1);
+	return true;
 }
 
 }
