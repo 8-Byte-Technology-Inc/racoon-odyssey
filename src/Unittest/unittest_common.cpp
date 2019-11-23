@@ -256,11 +256,96 @@ Exit:
 	TESTEND();
 }
 
+void unittest_common_parse_xml_buffer_overrun()
+{
+	std::string extended_utf8 = "\xc3\x98\xc2\xb7x"; // 5 bytes.
+
+	std::string test_string;
+	for (u32 j = 0; j < 11; ++j)
+	{
+		test_string += extended_utf8;
+	}
+
+	std::vector<unittest_common_parse_xml_obj_seq> res;
+
+	std::string test = "<?xml version = \"1.0\" encoding=\"utf-8\"?>\n";
+	{
+		res.emplace_back();
+		unittest_common_parse_xml_obj_seq& t = res.back();
+		t.m_type = unittest_common_parse_xml_obj_seq_type_start;
+		t.m_psz = "t";
+		test += "<t>";
+	}
+
+
+	for (u32 i = 0; i < 17; ++i)
+	{
+		{
+			res.emplace_back();
+			unittest_common_parse_xml_obj_seq& t = res.back();
+			t.m_type = unittest_common_parse_xml_obj_seq_type_start;
+			t.m_psz = "t";
+			test += "<t>";
+		}
+
+		{
+			res.emplace_back();
+			unittest_common_parse_xml_obj_seq& t = res.back();
+			t.m_type = unittest_common_parse_xml_obj_seq_type_data;
+			t.m_psz = test_string.c_str();
+			test += test_string;
+		}
+
+		{
+			res.emplace_back();
+			unittest_common_parse_xml_obj_seq& t = res.back();
+			t.m_type = unittest_common_parse_xml_obj_seq_type_end;
+			t.m_psz = "t";
+			test += "</t>\n";
+		}
+	}
+
+	{
+		res.emplace_back();
+		unittest_common_parse_xml_obj_seq& t = res.back();
+		t.m_type = unittest_common_parse_xml_obj_seq_type_end;
+		t.m_psz = "t";
+		test += "</t>\n";
+	}
+
+	TESTBEGIN("XML Parser buffer overrun (utf-8)");
+
+	unittest_common_parse_xml_obj obj;
+	obj.m_pData = reinterpret_cast<const u8*>(test.c_str());
+	obj.m_size = static_cast<u32>(test.size());
+	obj.m_pSeq = res.data();
+	obj.m_seqCount = static_cast<u32>(res.size());
+
+	XML_Parser parser;
+	parser.SetBufferSize(16);
+	parser.SetReader(std::bind(&unittest_common_parse_xml_obj::read, &obj, std::placeholders::_1, std::placeholders::_2));
+	parser.SetHandlers(std::bind(&unittest_common_parse_xml_obj::start, &obj, std::placeholders::_1, std::placeholders::_2),
+		std::bind(&unittest_common_parse_xml_obj::data, &obj, std::placeholders::_1, std::placeholders::_2),
+		std::bind(&unittest_common_parse_xml_obj::end, &obj, std::placeholders::_1));
+
+	XML_Parser_Result r = parser.Parse();
+	if (r != XML_Parser_Result_Success)
+	{
+		TESTOUT(unittest_output_error, "Parse failed.");
+		goto Exit;
+	}
+
+Exit:
+	TESTEND();
+
+}
+
 void unittest_common()
 {
 	SUITEBEGIN("Starting common tests ...");
 
 	unittest_common_parse_xml();
+	unittest_common_parse_xml_buffer_overrun();
 
 	SUITEEND();
 }
